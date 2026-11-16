@@ -1,0 +1,220 @@
+/* ==========================================================================
+   Design System: Nocturne Editorial (06-ui-design-system.md & 07-design.md)
+   Esquemas: Escuro (dark), Claro (light) e Sistema (system)
+   ========================================================================== */
+:root,
+:root[data-theme="dark"] {
+  --surface: #131313;
+  --surface-dim: #131313;
+  --surface-bright: #393939;
+  --surface-container-lowest: #0e0e0e;
+  --surface-container-low: #1b1c1c;
+  --surface-container: #202020;
+  --surface-container-high: #2a2a2a;
+  --surface-container-highest: #353535;
+  --on-surface: #e5e2e1;
+  --on-surface-variant: #c3c6d1;
+  --inverse-surface: #e5e2e1;
+  --inverse-on-surface: #303030;
+  --outline: #8d919b;
+  --outline-variant: #424750;
+  --surface-tint: #a8c8ff;
+  --primary: #b5cfff;
+  --on-primary: #003061;
+  --primary-container: #8ab4f8;
+  --on-primary-container: #0d4582;
+  --inverse-primary: #315f9d;
+  --secondary: #8ed7a1;
+  --on-secondary: #00391b;
+  --secondary-container: #01552c;
+  --on-secondary-container: #80c894;
+  --tertiary: #ffbfb8;
+  --on-tertiary: #4d2521;
+  --tertiary-container: #e0a49d;
+  --on-tertiary-container: #653934;
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+  --background: #131313;
+  --on-background: #e5e2e1;
+  --surface-variant: #353535;
+  --surface-base: #131313;
+  --surface-card: #202020;
+  --surface-elevated: #2a2a2a;
+  --border-subtle: #353535;
+  --border-focus: #8ab4f8;
+  --text-primary: #e5e2e1;
+  --text-muted: #9aa0a6;
+  --success-pastel: #81c995;
+  --success-pastel-tint: #a8dab5;
+  --success-container: #183724;
+  --on-success-container: #a8dab5;
+  --error-pastel: #f28b82;
+  --warning-amber: #fdd663;
+  --warning-pastel: #fde293;
+  --warning-pastel-tint: #fef0c7;
+  --warning-container: #3b2e08;
+  --on-warning-container: #fde293;
+
+  --rounded-sm: 0.25rem;
+  --rounded: 0.5rem;
+  --rounded-md: 0.75rem;
+  --rounded-lg: 1rem;
+  --rounded-xl: 1.5rem;
+  --rounded-full: 9999px;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --surface: #f8f9fa;
+  --surface-dim: #eef0f3;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f1f3f5;
+  --surface-container: #ffffff;
+  --surface-container-high: #f3f5f8;
+  --surface-container-highest: #e8ecf1;
+  --on-surface: #1b1c1c;
+  --on-surface-variant: #44474f;
+  --inverse-surface: #202020;
+  --inverse-on-surface: #f1f3f5;
+  --outline: #6c727f;
+  --outline-variant: #c4c9d0;
+  --surface-tint: #1b6ef3;
+  --primary: #0b57d0;
+  --on-primary: #003061;
+  --primary-container: #8ab4f8;
+  --on-primary-container: #001d35;
+  --inverse-primary: #8ab4f8;
+  --secondary: #137333;
+  --on-secondary: #00391b;
+  --secondary-container: #ceead6;
+  --on-secondary-container: #0d652d;
+  --tertiary: #9c3d35;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #ffdad6;
+  --on-tertiary-container: #410002;
+  --error: #b3261e;
+  --on-error: #690005;
+  --error-container: #f9dedc;
+  --on-error-container: #410e0b;
+  --background: #f8f9fa;
+  --on-background: #1b1c1c;
+  --surface-variant: #e1e3e8;
+  --surface-base: #f8f9fa;
+  --surface-card: #ffffff;
+  --surface-elevated: #f3f5f8;
+  --border-subtle: #dce0e5;
+  --border-focus: #1b6ef3;
+  --text-primary: #1b1c1c;
+  --text-muted: #5f6368;
+  --success-pastel: #81c995;
+  --success-pastel-tint: #137333;
+  --success-container: #e6f4ea;
+  --on-success-container: #137333;
+  --error-pastel: #f28b82;
+  --warning-amber: #fdd663;
+  --warning-pastel: #fde293;
+  --warning-pastel-tint: #fef0c7;
+  --warning-container: #3b2e08;
+  --on-warning-container: #fde293;
+
+  color-scheme: light;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--surface-base);
+  color: var(--text-primary);
+  font-family: "Roboto Flex", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Inputs, Selects & Textareas — Nocturne Editorial Base & Focus */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  background-color: var(--surface-card) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--rounded-md) !important;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.2) !important;
+}
+
+select option {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+}
+
+/* Checkboxes & Radio Buttons */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary-container);
+  cursor: pointer;
+}
+
+/* Tables inside Nocturne Standard Pages */
+table {
+  color: var(--text-primary);
+}
+
+th {
+  color: var(--text-muted) !important;
+}
+
+td {
+  color: var(--text-primary);
+}
+
+code {
+  background-color: var(--surface-elevated);
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: var(--rounded-sm);
+  font-size: 12px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-container-low);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-container-highest);
+  border-radius: var(--rounded-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--outline-variant);
+}

@@ -1,0 +1,1 @@
+{"version":"2.1.9","results":[[":apps/web/tests/ui-completeness.test.tsx",{"duration":11.048099999999977,"failed":true}],[":apps/web/tests/app.e2e.test.tsx",{"duration":7.4396999999999025,"failed":true}],[":apps/web/tests/theme-schemes.test.tsx",{"duration":7.603399999999965,"failed":true}],[":apps/web/tests/ui-completeness.spec.ts",{"duration":0,"failed":true}]]}

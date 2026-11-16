@@ -1,0 +1,27 @@
+Metadata-Version: 2.4
+Name: pesquisamaster-api
+Version: 0.1.0
+Summary: Backend da Plataforma Eleitoral, Tabulação TSE e Agregador
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: pydantic>=2.9.0
+Requires-Dist: pydantic-settings>=2.5.0
+Requires-Dist: sqlalchemy[asyncio]>=2.0.35
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: alembic>=1.13.3
+Requires-Dist: structlog>=24.4.0
+Requires-Dist: PyJWT>=2.9.0
+Requires-Dist: pwdlib[argon2]>=0.2.1
+Requires-Dist: redis>=5.1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24.0; extra == "dev"
+Requires-Dist: httpx>=0.27.2; extra == "dev"
+Requires-Dist: ruff>=0.6.8; extra == "dev"
+Requires-Dist: mypy>=1.11.2; extra == "dev"
+
+# PesquisaMaster API
+
+Backend FastAPI + SQLAlchemy 2.0 Async + Alembic.

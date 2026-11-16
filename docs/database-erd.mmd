@@ -1,0 +1,152 @@
+erDiagram
+    USERS ||--o{ SURVEYS : "cria"
+    USERS ||--o{ FIELD_ASSIGNMENTS : "recebe"
+    USERS ||--o{ SECURITY_AUDIT_LOGS : "gera"
+    SURVEYS ||--|{ QUESTIONNAIRE_ITEMS : "contem"
+    SURVEYS ||--|{ SAMPLE_STRATA : "define"
+    SURVEYS ||--o{ FIELD_ASSIGNMENTS : "aloca"
+    SURVEYS ||--o{ INTERVIEWS : "coleta"
+    SAMPLE_STRATA ||--o{ QUOTA_CELLS : "subdivide"
+    INTERVIEWS ||--|{ INTERVIEW_ANSWERS : "responde"
+    POLL_INSTITUTES ||--o{ EXTERNAL_POLLS : "publica"
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        string full_name
+        string role "ADMIN | STATISTICIAN | SUPERVISOR | RESEARCHER | ANALYST | AUDITOR"
+        string bound_device_id "Device Binding para Pesquisador"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
+
+    SECURITY_AUDIT_LOGS {
+        bigint id PK
+        uuid correlation_id
+        uuid actor_user_id FK
+        string module
+        string action
+        jsonb payload_diff
+        string prev_hash "SHA-256 do registro anterior"
+        string record_hash UK "SHA-256 encadeado imutavel"
+        timestamptz created_at
+    }
+
+    SURVEYS {
+        uuid id PK
+        string tse_protocol_number UK "Registro PesqEle TSE"
+        string title
+        string election_sphere "MUNICIPAL | ESTADUAL | FEDERAL"
+        string target_uf
+        string target_municipality_ibge
+        string contracting_entity_doc
+        string statistician_conre
+        integer planned_sample_size
+        numeric confidence_level "NUMERIC(19,4)"
+        numeric margin_of_error "NUMERIC(19,4)"
+        string status "DRAFT | ACTIVE_FIELD | CLOSED | PUBLISHED"
+        uuid created_by FK
+        timestamptz field_start_at
+        timestamptz field_end_at
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
+
+    QUESTIONNAIRE_ITEMS {
+        uuid id PK
+        uuid survey_id FK
+        integer order_index
+        string question_code
+        string question_type "SPONTANEOUS | STIMULATED_SINGLE | STIMULATED_MULTIPLE | REJECTION"
+        string prompt_text
+        boolean rotate_options "Rodizio de disco"
+        jsonb options_schema
+        jsonb skip_logic_rules
+        timestamptz created_at
+    }
+
+    SAMPLE_STRATA {
+        uuid id PK
+        uuid survey_id FK
+        string region_code
+        string geographic_name
+        geometry boundary_geom "PostGIS Polygon/MultiPolygon (SRID 4674)"
+        numeric population_proportion "NUMERIC(19,4)"
+        integer target_interviews "Alocacao Hare-Niemeyer"
+        timestamptz created_at
+    }
+
+    QUOTA_CELLS {
+        uuid id PK
+        uuid stratum_id FK
+        string gender
+        string age_bracket
+        string education_level
+        string income_bracket
+        numeric target_proportion "NUMERIC(19,4)"
+        integer target_count
+        integer current_valid_count
+        integer version "Optimistic Lock"
+        timestamptz updated_at
+    }
+
+    FIELD_ASSIGNMENTS {
+        uuid id PK
+        uuid survey_id FK
+        uuid stratum_id FK
+        uuid researcher_id FK
+        integer assigned_quota
+        timestamptz assigned_at
+    }
+
+    INTERVIEWS {
+        uuid id PK
+        uuid survey_id FK
+        uuid stratum_id FK
+        uuid quota_cell_id FK
+        uuid researcher_id FK
+        string idempotency_key UK
+        string client_hmac_signature
+        geometry capture_point "PostGIS Point (SRID 4674)"
+        integer duration_seconds
+        boolean is_geofence_valid
+        string audit_status "VALID | FLAGGED | PURGED"
+        string purge_reason
+        numeric raking_weight "NUMERIC(19,4) Peso pos-estratificacao IPF"
+        timestamptz started_at
+        timestamptz finished_at
+        timestamptz synced_at
+    }
+
+    INTERVIEW_ANSWERS {
+        uuid id PK
+        uuid interview_id FK
+        uuid question_id FK
+        string selected_option_code
+        string spontaneous_text
+        timestamptz created_at
+    }
+
+    POLL_INSTITUTES {
+        uuid id PK
+        string name UK
+        string cnpj UK
+        numeric methodological_weight "NUMERIC(19,4)"
+        numeric house_effect_adjustment "NUMERIC(19,4)"
+        timestamptz created_at
+    }
+
+    EXTERNAL_POLLS {
+        uuid id PK
+        uuid institute_id FK
+        string tse_protocol_number UK
+        date field_median_date
+        integer sample_size
+        numeric margin_of_error "NUMERIC(19,4)"
+        jsonb candidate_results
+        timestamptz created_at
+    }

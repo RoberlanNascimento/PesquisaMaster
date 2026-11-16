@@ -1,0 +1,36 @@
+name: Quality Gate — PesquisaMaster CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Backend dependencies
+        run: |
+          python -m venv apps/api/.venv
+          apps/api/.venv/bin/pip install -e "apps/api[dev]"
+
+      - name: Install Frontend dependencies
+        run: npm --prefix apps/web ci
+
+      - name: Execute Global Quality Gate (verify-all.sh)
+        run: bash ./scripts/verify-all.sh
+

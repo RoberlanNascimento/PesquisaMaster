@@ -1,0 +1,2081 @@
+{
+  "amostras": {
+    "columns": [
+      {
+        "name": "id_amostra",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('amostras_id_amostra_seq'::regclass)"
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descricao",
+        "type": "character varying",
+        "length": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nivel_confianca",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": "95.00"
+      },
+      {
+        "name": "margem_erro",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "proporcao_esperada",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": "0.50"
+      },
+      {
+        "name": "populacao_universo",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "z_score",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tamanho_amostral",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "metodo_alocacao",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": "'proporcional'::character varying"
+      },
+      {
+        "name": "calculado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "id_eleitorado_tse",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      },
+      {
+        "column": "id_eleitorado_tse",
+        "ref_table": "eleitorado_tse",
+        "ref_column": "id_eleitorado_tse"
+      }
+    ]
+  },
+  "amostras_cotas": {
+    "columns": [
+      {
+        "name": "id_cota",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('amostras_cotas_id_cota_seq'::regclass)"
+      },
+      {
+        "name": "id_amostra_dimensao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "categoria",
+        "type": "character varying",
+        "length": 60,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "percentual_meta",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "quantidade_meta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "quantidade_coletada",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "0"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_amostra_dimensao",
+        "ref_table": "amostras_dimensao",
+        "ref_column": "id_amostra_dimensao"
+      },
+      {
+        "column": "id_bairro",
+        "ref_table": "bairros_ibge",
+        "ref_column": "id_bairro"
+      }
+    ]
+  },
+  "amostras_dimensao": {
+    "columns": [
+      {
+        "name": "id_amostra_dimensao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('amostras_dimensao_id_amostra_dimensao_seq'::regclass)"
+      },
+      {
+        "name": "id_amostra",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nome_dimensao",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fonte_dados",
+        "type": "character varying",
+        "length": 60,
+        "nullable": false,
+        "default": "'Estatísticas TSE 2026'::character varying"
+      },
+      {
+        "name": "obrigatoria",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "ordem_exibicao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "1"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_amostra",
+        "ref_table": "amostras",
+        "ref_column": "id_amostra"
+      }
+    ]
+  },
+  "atribuicao_pesquisadores": {
+    "columns": [
+      {
+        "name": "id_atribuicao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('atribuicao_pesquisadores_id_atribuicao_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_profissional",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "lote_setor",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": "'Geral'::character varying"
+      },
+      {
+        "name": "meta_entrevistas",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_inicio",
+        "type": "date",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_limite",
+        "type": "date",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status_atribuicao",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": "'ativa'::character varying"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      },
+      {
+        "column": "id_profissional",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_bairro",
+        "ref_table": "bairros_ibge",
+        "ref_column": "id_bairro"
+      }
+    ]
+  },
+  "bairros_ibge": {
+    "columns": [
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('bairros_ibge_id_bairro_seq'::regclass)"
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_regiao_zona",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo_bairro_ibge",
+        "type": "character varying",
+        "length": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "nome_bairro",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "populacao_total",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "eleitorado_total",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "renda_media_domiciliar",
+        "type": "numeric",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      },
+      {
+        "column": "id_regiao_zona",
+        "ref_table": "regiao_zonas",
+        "ref_column": "id_regiao_zona"
+      }
+    ]
+  },
+  "candidatos_produtos": {
+    "columns": [
+      {
+        "name": "id_candidato_produto",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('candidatos_produtos_id_candidato_produto_seq'::regclass)"
+      },
+      {
+        "name": "nome_urna_comercial",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nome_completo_razao",
+        "type": "character varying",
+        "length": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "numero_partido",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "sigla_partido_marca",
+        "type": "character varying",
+        "length": 30,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cargo_categoria",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "foto_url",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cor_hex",
+        "type": "character varying",
+        "length": 7,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": []
+  },
+  "cenario_candidatos": {
+    "columns": [
+      {
+        "name": "id_cenario_candidato",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('cenario_candidatos_id_cenario_candidato_seq'::regclass)"
+      },
+      {
+        "name": "id_cenario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_candidato_produto",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "ordem_apresentacao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_cenario",
+        "ref_table": "cenarios_pesquisa",
+        "ref_column": "id_cenario"
+      },
+      {
+        "column": "id_candidato_produto",
+        "ref_table": "candidatos_produtos",
+        "ref_column": "id_candidato_produto"
+      }
+    ]
+  },
+  "cenarios_pesquisa": {
+    "columns": [
+      {
+        "name": "id_cenario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('cenarios_pesquisa_id_cenario_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "identificador",
+        "type": "character varying",
+        "length": 80,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_cenario",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      }
+    ]
+  },
+  "demografia_ibge": {
+    "columns": [
+      {
+        "name": "id_demografia",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('demografia_ibge_id_demografia_seq'::regclass)"
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "dimensao",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "categoria",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "populacao_absoluta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "percentual_universo",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fonte",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": "'Censo IBGE 2022'::character varying"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      }
+    ]
+  },
+  "eleitorado_tse": {
+    "columns": [
+      {
+        "name": "id_eleitorado_tse",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('eleitorado_tse_id_eleitorado_tse_seq'::regclass)"
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ano_referencia",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "mes_referencia",
+        "type": "smallint",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "zona_eleitoral",
+        "type": "character varying",
+        "length": 10,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "secao_eleitoral",
+        "type": "character varying",
+        "length": 10,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "quantidade_eleitores",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "eleitores_biometria",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "populacao_ibge",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ano_censo_ibge",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tipo_captura",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "fonte_endpoint",
+        "type": "character varying",
+        "length": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_usuario_captura",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "data_captura",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "hash_origem",
+        "type": "character varying",
+        "length": 64,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      },
+      {
+        "column": "id_bairro",
+        "ref_table": "bairros_ibge",
+        "ref_column": "id_bairro"
+      },
+      {
+        "column": "id_usuario_captura",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "grupos_opcoes": {
+    "columns": [
+      {
+        "name": "id_grupo_opcao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('grupos_opcoes_id_grupo_opcao_seq'::regclass)"
+      },
+      {
+        "name": "nome_grupo",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_escala",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descricao",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "criado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "foreign_keys": []
+  },
+  "historico_desbloqueio_pesquisas": {
+    "columns": [
+      {
+        "name": "id_historico_desbloqueio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('historico_desbloqueio_pesquisas_id_historico_desbloqueio_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario_master",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_desbloqueio",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "motivo_desbloqueio",
+        "type": "text",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "hash_integridade_anterior",
+        "type": "character varying",
+        "length": 64,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status_anterior",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      },
+      {
+        "column": "id_usuario_master",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "historico_reatribuicao_questionarios": {
+    "columns": [
+      {
+        "name": "id_historico_reatribuicao",
+        "type": "bigint",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('historico_reatribuicao_questionar_id_historico_reatribuicao_seq'::regclass)"
+      },
+      {
+        "name": "id_questionario_pessoa",
+        "type": "bigint",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pesquisador_anterior",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pesquisador_novo",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario_autorizador",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_reatribuicao",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_questionario_pessoa",
+        "ref_table": "questionarios_pessoas",
+        "ref_column": "id_questionario_pessoa"
+      },
+      {
+        "column": "id_pesquisador_anterior",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_pesquisador_novo",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_usuario_autorizador",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "itens_bateria": {
+    "columns": [
+      {
+        "name": "id_item_bateria",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('itens_bateria_id_item_bateria_seq'::regclass)"
+      },
+      {
+        "name": "id_pergunta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "descricao_item",
+        "type": "character varying",
+        "length": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "ordem",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pergunta",
+        "ref_table": "perguntas",
+        "ref_column": "id_pergunta"
+      }
+    ]
+  },
+  "municipios": {
+    "columns": [
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('municipios_id_municipio_seq'::regclass)"
+      },
+      {
+        "name": "nome",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "estado",
+        "type": "character",
+        "length": 2,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo_ibge",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "populacao_total",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "eleitorado_total",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": []
+  },
+  "opcoes_resposta": {
+    "columns": [
+      {
+        "name": "id_opcao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('opcoes_resposta_id_opcao_seq'::regclass)"
+      },
+      {
+        "name": "id_grupo_opcao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "rotulo",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo_valor",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ordem_exibicao",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "eh_neutro_invalido",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "cor_hex",
+        "type": "character varying",
+        "length": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_grupo_opcao",
+        "ref_table": "grupos_opcoes",
+        "ref_column": "id_grupo_opcao"
+      }
+    ]
+  },
+  "perguntas": {
+    "columns": [
+      {
+        "name": "id_pergunta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('perguntas_id_pergunta_seq'::regclass)"
+      },
+      {
+        "name": "identificador_tecnico",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "enunciado",
+        "type": "text",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_questao",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_grupo_opcao",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_grupo_opcao",
+        "ref_table": "grupos_opcoes",
+        "ref_column": "id_grupo_opcao"
+      }
+    ]
+  },
+  "pesquisas": {
+    "columns": [
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('pesquisas_id_pesquisa_seq'::regclass)"
+      },
+      {
+        "name": "nome",
+        "type": "character varying",
+        "length": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_inicio",
+        "type": "date",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_fim",
+        "type": "date",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "USER-DEFINED",
+        "length": null,
+        "nullable": false,
+        "default": "'rascunho'::status_pesquisa_enum"
+      },
+      {
+        "name": "tse_status",
+        "type": "USER-DEFINED",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "numero_registro_tse",
+        "type": "character varying",
+        "length": 50,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "data_registro_tse",
+        "type": "date",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "data_divulgacao",
+        "type": "date",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_amostra",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_profissional",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "criado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "atualizado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "is_bloqueada",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "fechada_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "fechada_por",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "hash_integridade",
+        "type": "character varying",
+        "length": 64,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "motivo_fechamento",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "fechada_por",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      },
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      },
+      {
+        "column": "id_profissional",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_usuario",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "pessoas": {
+    "columns": [
+      {
+        "name": "id_pessoa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('pessoas_id_pessoa_seq'::regclass)"
+      },
+      {
+        "name": "nome",
+        "type": "character varying",
+        "length": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "sexo",
+        "type": "character",
+        "length": 1,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "faixa_etaria",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "escolaridade",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "faixa_renda",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "religiao",
+        "type": "character varying",
+        "length": 30,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "bairro_distrito",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "regiao_geografica",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_bairro",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": []
+  },
+  "profissionais": {
+    "columns": [
+      {
+        "name": "id_profissional",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('profissionais_id_profissional_seq'::regclass)"
+      },
+      {
+        "name": "nome",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "registro_profissional",
+        "type": "character varying",
+        "length": 30,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cpf_cnpj",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "especialidade",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "tipo_profissional",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": "'pesquisador_campo'::character varying"
+      },
+      {
+        "name": "telefone",
+        "type": "character varying",
+        "length": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": []
+  },
+  "questionario_perguntas": {
+    "columns": [
+      {
+        "name": "id_questionario_pergunta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('questionario_perguntas_id_questionario_pergunta_seq'::regclass)"
+      },
+      {
+        "name": "id_questionario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pergunta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_cenario",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "secao_bloco",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "ordem",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "obrigatoria",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "regra_salto_json",
+        "type": "jsonb",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "rotulo_customizado",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "formato_exibicao",
+        "type": "character varying",
+        "length": 30,
+        "nullable": false,
+        "default": "'lista_vertical'::character varying"
+      },
+      {
+        "name": "randomizar_opcoes",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "min_selecoes",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "max_selecoes",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "opcoes_especiais_json",
+        "type": "jsonb",
+        "length": null,
+        "nullable": false,
+        "default": "'[\"branco\", \"nulo\", \"nao_sabe\"]'::jsonb"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_questionario",
+        "ref_table": "questionarios",
+        "ref_column": "id_questionario"
+      },
+      {
+        "column": "id_pergunta",
+        "ref_table": "perguntas",
+        "ref_column": "id_pergunta"
+      },
+      {
+        "column": "id_cenario",
+        "ref_table": "cenarios_pesquisa",
+        "ref_column": "id_cenario"
+      }
+    ]
+  },
+  "questionarios": {
+    "columns": [
+      {
+        "name": "id_questionario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('questionarios_id_questionario_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "titulo",
+        "type": "character varying",
+        "length": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo_versao",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": "'v1.0'::character varying"
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      }
+    ]
+  },
+  "questionarios_pessoas": {
+    "columns": [
+      {
+        "name": "id_questionario_pessoa",
+        "type": "bigint",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('questionarios_pessoas_id_questionario_pessoa_seq'::regclass)"
+      },
+      {
+        "name": "id_questionario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pessoa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_resposta",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "latitude_coleta",
+        "type": "numeric",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "longitude_coleta",
+        "type": "numeric",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "peso_amostral",
+        "type": "numeric",
+        "length": null,
+        "nullable": false,
+        "default": "1.000000"
+      },
+      {
+        "name": "duracao_segundos",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status_auditoria",
+        "type": "character varying",
+        "length": 20,
+        "nullable": false,
+        "default": "'aprovada'::character varying"
+      },
+      {
+        "name": "id_pesquisador",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_questionario",
+        "ref_table": "questionarios",
+        "ref_column": "id_questionario"
+      },
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      },
+      {
+        "column": "id_pessoa",
+        "ref_table": "pessoas",
+        "ref_column": "id_pessoa"
+      },
+      {
+        "column": "id_pesquisador",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      }
+    ]
+  },
+  "regiao_zonas": {
+    "columns": [
+      {
+        "name": "id_regiao_zona",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('regiao_zonas_id_regiao_zona_seq'::regclass)"
+      },
+      {
+        "name": "id_municipio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "nome_regiao",
+        "type": "character varying",
+        "length": 60,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "sigla",
+        "type": "character varying",
+        "length": 10,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "descricao",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_municipio",
+        "ref_table": "municipios",
+        "ref_column": "id_municipio"
+      }
+    ]
+  },
+  "relatorios_tabulacao": {
+    "columns": [
+      {
+        "name": "id_relatorio",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('relatorios_tabulacao_id_relatorio_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "titulo_relatorio",
+        "type": "character varying",
+        "length": 120,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "configuracao_crosstab",
+        "type": "jsonb",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "criado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "atualizado_em",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      },
+      {
+        "column": "id_usuario",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "respostas": {
+    "columns": [
+      {
+        "name": "id_resposta",
+        "type": "bigint",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('respostas_id_resposta_seq'::regclass)"
+      },
+      {
+        "name": "id_questionario_pessoa",
+        "type": "bigint",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_questionario_pergunta",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_opcao",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_candidato_produto",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_item_bateria",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_cenario",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tipo_registro",
+        "type": "character varying",
+        "length": 25,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "codigo_especial",
+        "type": "character varying",
+        "length": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "valor_texto",
+        "type": "text",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "tempo_resposta_ms",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_opcao",
+        "ref_table": "opcoes_resposta",
+        "ref_column": "id_opcao"
+      },
+      {
+        "column": "id_candidato_produto",
+        "ref_table": "candidatos_produtos",
+        "ref_column": "id_candidato_produto"
+      },
+      {
+        "column": "id_questionario_pergunta",
+        "ref_table": "questionario_perguntas",
+        "ref_column": "id_questionario_pergunta"
+      },
+      {
+        "column": "id_questionario_pessoa",
+        "ref_table": "questionarios_pessoas",
+        "ref_column": "id_questionario_pessoa"
+      },
+      {
+        "column": "id_item_bateria",
+        "ref_table": "itens_bateria",
+        "ref_column": "id_item_bateria"
+      },
+      {
+        "column": "id_cenario",
+        "ref_table": "cenarios_pesquisa",
+        "ref_column": "id_cenario"
+      }
+    ]
+  },
+  "transferencias_atribuicao": {
+    "columns": [
+      {
+        "name": "id_transferencia",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('transferencias_atribuicao_id_transferencia_seq'::regclass)"
+      },
+      {
+        "name": "id_pesquisa",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_atribuicao_origem",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_atribuicao_destino",
+        "type": "integer",
+        "length": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "id_pesquisador_origem",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_pesquisador_destino",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "id_autorizador",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "quantidade_transferida",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "motivo",
+        "type": "text",
+        "length": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "data_transferencia",
+        "type": "timestamp with time zone",
+        "length": null,
+        "nullable": true,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "foreign_keys": [
+      {
+        "column": "id_pesquisa",
+        "ref_table": "pesquisas",
+        "ref_column": "id_pesquisa"
+      },
+      {
+        "column": "id_atribuicao_origem",
+        "ref_table": "atribuicao_pesquisadores",
+        "ref_column": "id_atribuicao"
+      },
+      {
+        "column": "id_atribuicao_destino",
+        "ref_table": "atribuicao_pesquisadores",
+        "ref_column": "id_atribuicao"
+      },
+      {
+        "column": "id_pesquisador_origem",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_pesquisador_destino",
+        "ref_table": "profissionais",
+        "ref_column": "id_profissional"
+      },
+      {
+        "column": "id_autorizador",
+        "ref_table": "usuarios",
+        "ref_column": "id_usuario"
+      }
+    ]
+  },
+  "usuarios": {
+    "columns": [
+      {
+        "name": "id_usuario",
+        "type": "integer",
+        "length": null,
+        "nullable": false,
+        "default": "nextval('usuarios_id_usuario_seq'::regclass)"
+      },
+      {
+        "name": "nome",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "email",
+        "type": "character varying",
+        "length": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "senha_hash",
+        "type": "character varying",
+        "length": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "cargo",
+        "type": "character varying",
+        "length": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "chave_mestre_hash",
+        "type": "character varying",
+        "length": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ativo",
+        "type": "boolean",
+        "length": null,
+        "nullable": false,
+        "default": "true"
+      }
+    ],
+    "foreign_keys": []
+  }
+}
