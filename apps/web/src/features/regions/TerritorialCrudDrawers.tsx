@@ -112,7 +112,7 @@ export function NeighborhoodDrawerForm({
     <SlideOverDrawer
       isOpen={isOpen}
       title={editing ? `Editar Bairro (${editing.code})` : "Novo Bairro vinculado ao Município e Região"}
-      subtitle="Selecione nos comboboxes: País -> Estado (UF) -> Município -> Região Municipal"
+      subtitle="Selecione: País -> Estado (UF) -> Município -> Bairro"
       onClose={onClose}
       footerActions={
         <>
@@ -132,7 +132,7 @@ export function NeighborhoodDrawerForm({
       <form id="neighborhood-crud-form" onSubmit={handleSubmit} style={{ display: "grid", gap: "12px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <div>
-            <label style={CRUD_LABEL_STYLE}>1. País (Combobox)</label>
+            <label style={CRUD_LABEL_STYLE}>País</label>
             <select
               data-testid="select-neighborhood-country"
               value={countryId}
@@ -156,7 +156,7 @@ export function NeighborhoodDrawerForm({
             </select>
           </div>
           <div>
-            <label style={CRUD_LABEL_STYLE}>2. Estado / UF (Combobox)</label>
+            <label style={CRUD_LABEL_STYLE}>Estado / UF</label>
             <select
               data-testid="select-neighborhood-state"
               value={stateId}
@@ -178,7 +178,7 @@ export function NeighborhoodDrawerForm({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <div>
-            <label style={CRUD_LABEL_STYLE}>3. Município (Combobox)</label>
+            <label style={CRUD_LABEL_STYLE}>Município</label>
             <select
               data-testid="select-neighborhood-municipality"
               value={municipalityId}
@@ -194,7 +194,7 @@ export function NeighborhoodDrawerForm({
             </select>
           </div>
           <div>
-            <label style={CRUD_LABEL_STYLE}>4. Região Municipal (Combobox)</label>
+            <label style={CRUD_LABEL_STYLE}>Zonas</label>
             <select data-testid="select-neighborhood-region" value={regionId} onChange={(e) => setRegionId(e.target.value)} style={CRUD_INPUT_STYLE}>
               {drawerRegions.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
             </select>

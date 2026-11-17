@@ -135,8 +135,8 @@ export function NeighborhoodsCrudScreen(): React.JSX.Element {
       <RegionsFeedbackToast message={toast} testId="neighborhoods-feedback-toast" />
 
       <EnterpriseCrudWorkspace<FlattenedNeighborhoodRecord>
-        title="Gerenciamento de Bairros e Setores Censitários IBGE"
-        subtitle="Cadastro exclusivo de Bairros com combobox em cascata: País -> Estado (UF) -> Município -> Região Municipal"
+        title="Cadastro de Bairros"
+        subtitle="Cadastro Bairros: País -> Estado (UF) -> Município -> Bairros"
         globalActions={
           <button type="button" data-testid="btn-new-neighborhood" onClick={() => { setEditing(null); setDrawerOpen(true); }} style={NOCTURNE_BUTTON_STYLES.primary}>
             + Novo Bairro

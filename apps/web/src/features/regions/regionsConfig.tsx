@@ -143,7 +143,7 @@ export function getRegionFilters(
 export const REGION_COLUMNS: readonly WorkspaceColumn<MunicipalRegionRecord>[] = [
   {
     key: "code",
-    header: "Código / Município & UF",
+    header: "Município",
     render: (r) => (
       <div>
         <strong style={{ fontFamily: "monospace", color: "#8ab4f8", fontSize: "12px" }}>
@@ -157,7 +157,7 @@ export const REGION_COLUMNS: readonly WorkspaceColumn<MunicipalRegionRecord>[] =
   },
   {
     key: "name",
-    header: "Região Administrativa & Lei do Plano Diretor",
+    header: "Zonas Municipais",
     render: (r) => (
       <div>
         <div style={{ fontWeight: 600, color: "#e5e2e1" }}>{r.name}</div>
@@ -197,7 +197,7 @@ export const REGION_COLUMNS: readonly WorkspaceColumn<MunicipalRegionRecord>[] =
   },
   {
     key: "neighborhoods",
-    header: "Bairros / Setores IBGE",
+    header: "Bairros",
     align: "center",
     render: (r) => (
       <span

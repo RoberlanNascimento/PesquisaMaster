@@ -32,15 +32,15 @@ export function RegionDrawerForm({
   readonly defaultMunicipalityId?: string;
   readonly onSave: (data: MunicipalRegionFormData) => void;
 }): React.JSX.Element {
-  const [countryId, setCountryId] = useState("country-br");
-  const [stateId, setStateId] = useState("state-sp");
-  const [municipalityId, setMunicipalityId] = useState("mun-sp");
-  const [code, setCode] = useState("REG-SP-NORTE");
-  const [name, setName] = useState("Macrozona Norte — Santana, Tucuruvi & Vila Maria");
+  const [countryId, setCountryId] = useState("país");
+  const [stateId, setStateId] = useState("estado");
+  const [municipalityId, setMunicipalityId] = useState("municipio");
+  const [code, setCode] = useState("Código");
+  const [name, setName] = useState("Zonas Municipais");
   const [masterPlanZone, setMasterPlanZone] = useState<UrbanZoneType>("ZONA_NORTE");
-  const [masterPlanLawRef, setMasterPlanLawRef] = useState("Lei Municipal nº 16.050/2014 (PDE-SP)");
-  const [electorateTotal, setElectorateTotal] = useState(1420000);
-  const [electorateWeightPct, setElectorateWeightPct] = useState("16.3000");
+  const [masterPlanLawRef, setMasterPlanLawRef] = useState("Plano Diretor");
+  const [electorateTotal, setElectorateTotal] = useState(0);
+  const [electorateWeightPct, setElectorateWeightPct] = useState("0.000");
   const [censusSectorsCount, setCensusSectorsCount] = useState(310);
 
   useEffect(() => {
@@ -62,12 +62,12 @@ export function RegionDrawerForm({
       setCountryId(targetState?.countryId ?? countries[0]?.id ?? "country-br");
       setStateId(targetState?.id ?? "state-sp");
       setMunicipalityId(targetMun?.id ?? "mun-sp");
-      setCode("REG-SP-NORTE");
-      setName("Macrozona Norte — Santana, Tucuruvi & Vila Maria");
+      setCode("Código");
+      setName("Nome da Zona Municipal");
       setMasterPlanZone("ZONA_NORTE");
-      setMasterPlanLawRef(targetMun?.masterPlanLawRef ?? "Lei Municipal nº 16.050/2014 (PDE-SP)");
-      setElectorateTotal(1420000);
-      setElectorateWeightPct("16.3000");
+      setMasterPlanLawRef(targetMun?.masterPlanLawRef ?? "Lei Municipal");
+      setElectorateTotal(0);
+      setElectorateWeightPct("0.000");
       setCensusSectorsCount(310);
     }
   }, [initialData, isOpen, countries, states, municipalities, defaultMunicipalityId]);
@@ -111,7 +111,7 @@ export function RegionDrawerForm({
   return (
     <SlideOverDrawer
       isOpen={isOpen}
-      title={initialData ? `Editar Região Municipal (${initialData.code})` : "Nova Região Municipal vinculada ao Município"}
+      title={initialData ? `Editar Zona Municipal (${initialData.code})` : "Zonas Municipais"}
       subtitle="Selecione País -> Estado (UF) -> Município e defina a macrozona do Plano Diretor"
       onClose={onClose}
       footerActions={
@@ -197,27 +197,8 @@ export function RegionDrawerForm({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-          <div>
-            <label style={FIELD_LABEL_STYLE}>Código da Região</label>
-            <input type="text" data-testid="input-region-code" value={code} onChange={(e) => setCode(e.target.value)} style={INPUT_STYLE} required />
-          </div>
-          <div>
-            <label style={FIELD_LABEL_STYLE}>Macrozona do Plano Diretor</label>
-            <select data-testid="select-region-zone" value={masterPlanZone} onChange={(e) => setMasterPlanZone(e.target.value as UrbanZoneType)} style={INPUT_STYLE}>
-              <option value="ZONA_CENTRAL">Zona Central</option>
-              <option value="ZONA_NORTE">Zona Norte</option>
-              <option value="ZONA_SUL">Zona Sul</option>
-              <option value="ZONA_LESTE">Zona Leste</option>
-              <option value="ZONA_OESTE">Zona Oeste</option>
-              <option value="ZONA_EXPANSAO_URBANA">Zona de Expansão Urbana</option>
-              <option value="ZONA_RURAL">Zona Rural</option>
-            </select>
-          </div>
-        </div>
-
         <div>
-          <label style={FIELD_LABEL_STYLE}>Nome da Região Administrativa / Macrozona</label>
+          <label style={FIELD_LABEL_STYLE}>Nome da Zona</label>
           <input type="text" data-testid="input-region-name" value={name} onChange={(e) => setName(e.target.value)} style={INPUT_STYLE} required />
         </div>
 

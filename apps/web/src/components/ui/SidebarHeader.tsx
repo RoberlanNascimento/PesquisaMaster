@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 import { useUiSessionStore } from "../../lib/store";
 import {
@@ -18,8 +18,23 @@ export function SidebarHeader({
   toggleSidebarCollapsed,
 }: SidebarHeaderProps): React.JSX.Element {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [orgName, setOrgName] = useState<string>("");
+  const [orgCnpj, setOrgCnpj] = useState<string>("");
   const globalSearchQuery = useUiSessionStore((state) => state.globalSearchQuery);
   const setGlobalSearchQuery = useUiSessionStore((state) => state.setGlobalSearchQuery);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/organizacoes", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((items: any[]) => {
+        if (Array.isArray(items) && items.length > 0) {
+          const first = items[0];
+          setOrgName(first.nome_fantasia || first.razao_social || "");
+          setOrgCnpj(first.cnpj || "");
+        }
+      })
+      .catch(() => { });
+  }, []);
 
   return (
     <div
@@ -56,8 +71,8 @@ export function SidebarHeader({
           onKeyDown={
             isCollapsed
               ? (e) => {
-                  if (e.key === "Enter" || e.key === " ") toggleSidebarCollapsed();
-                }
+                if (e.key === "Enter" || e.key === " ") toggleSidebarCollapsed();
+              }
               : undefined
           }
           role={isCollapsed ? "button" : undefined}
@@ -81,41 +96,30 @@ export function SidebarHeader({
               boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)",
               flexShrink: 0,
             }}
-            title="PesquisaMaster SaaS"
+            title={orgName || "PesquisaMaster SaaS"}
           >
             PM
           </div>
 
           {!isCollapsed && (
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
               <div
                 data-testid="sidebar-company-name"
                 style={{
                   fontWeight: 800,
-                  fontSize: "15px",
-                  color: "#f8fafc",
-                  letterSpacing: "-0.02em",
+                  fontSize: "14px",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                 }}
               >
-                PesquisaMaster
+                {orgName || "PesquisaMaster"}
               </div>
-              <span
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  color: "#60a5fa",
-                  backgroundColor: "rgba(59, 130, 246, 0.15)",
-                  padding: "1px 5px",
-                  borderRadius: "4px",
-                  border: "1px solid rgba(59, 130, 246, 0.3)",
-                  letterSpacing: "0.02em",
-                }}
-              >
-                SaaS
-              </span>
+              {orgCnpj && (
+                <div style={{ fontSize: "9px", color: colors.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  CNPJ: {orgCnpj}
+                </div>
+              )}
             </div>
           )}
         </div>

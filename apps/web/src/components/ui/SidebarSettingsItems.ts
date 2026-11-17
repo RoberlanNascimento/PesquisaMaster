@@ -18,21 +18,15 @@ export const GEO_DROPDOWN_ITEMS: readonly NavItemConfig[] = [
   {
     id: "regions-group",
     path: "/regioes-municipais",
-    label: "Regiões e Zonas",
-    subtitle: "Regiao_Zonas",
+    label: "Regiões",
+    subtitle: "Zonas Municipais",
     icon: "🗺️",
     subItems: [
       { id: "regions-country", path: "/regioes/pais", label: "País", icon: "◎" },
       { id: "regions-states", path: "/regioes/estados", label: "Estados", icon: "🏛️" },
-      { id: "regions", path: "/regioes-municipais", label: "Regiões", icon: "🗺️" },
+      { id: "regions", path: "/regioes-municipais", label: "Zonas", icon: "🗺️" },
+      { id: "regions-neighborhoods", path: "/regioes/bairros", label: "Bairros", icon: "🏘️" },
     ],
-  },
-  {
-    id: "regions-neighborhoods",
-    path: "/regioes/bairros",
-    label: "Bairros",
-    subtitle: "Bairros_IBGE",
-    icon: "🏘️",
   },
   {
     id: "geo-demography-ibge",

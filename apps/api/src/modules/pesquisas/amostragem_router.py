@@ -328,6 +328,52 @@ async def delete_cota(
     await session.commit()
 
 
+@amostragem_router.put("/amostras/{id_amostra}")
+async def update_amostra(
+    id_amostra: int,
+    payload: AmostraCreateSchema,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    z, calc_n = _calc_sample_size(
+        payload.populacao_universo,
+        payload.nivel_confianca,
+        payload.margem_erro,
+        payload.proporcao_esperada,
+    )
+    final_n = payload.tamanho_amostral if payload.tamanho_amostral and payload.tamanho_amostral > 0 else calc_n
+    res = await session.execute(
+        text(
+            """
+            UPDATE amostras
+            SET id_municipio = :id_municipio,
+                descricao = :descricao,
+                nivel_confianca = :nivel_confianca,
+                margem_erro = :margem_erro,
+                populacao_universo = :populacao_universo,
+                z_score = :z_score,
+                tamanho_amostral = :tamanho_amostral
+            WHERE id_amostra = :id_amostra
+            RETURNING id_amostra, id_municipio, descricao, tamanho_amostral, metodo_alocacao
+            """
+        ),
+        {
+            "id_amostra": id_amostra,
+            "id_municipio": payload.id_municipio,
+            "descricao": payload.descricao,
+            "nivel_confianca": payload.nivel_confianca,
+            "margem_erro": payload.margem_erro,
+            "populacao_universo": payload.populacao_universo,
+            "z_score": z,
+            "tamanho_amostral": final_n,
+        },
+    )
+    await session.commit()
+    row = res.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Amostra não encontrada.")
+    return dict(row)
+
+
 @amostragem_router.delete("/amostras/{id_amostra}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_amostra(
     id_amostra: int,

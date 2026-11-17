@@ -37,7 +37,7 @@ export function SidebarFooter({
 }: SidebarFooterProps): React.JSX.Element {
   const currentUser = useUiSessionStore((state) => state.currentUser);
   const connectedCollab = useUiSessionStore((state) => state.clientCollaborators[0]);
-  const logout = useUiSessionStore((state) => state.logout);
+
   const [dbUser, setDbUser] = useState<{ fullName?: string; roleLabel?: string } | null>(null);
 
   useEffect(() => {
@@ -133,16 +133,6 @@ export function SidebarFooter({
         {!isCollapsed && (
           <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
             <span
-              style={{
-                fontSize: "10px",
-                color: "#94a3b8",
-                fontWeight: 500,
-                lineHeight: "1.2",
-              }}
-            >
-              {userRole}
-            </span>
-            <span
               data-testid="sidebar-user-name"
               style={{
                 fontSize: "12px",
@@ -156,67 +146,85 @@ export function SidebarFooter({
             >
               {userName}
             </span>
+            <span
+              style={{
+                fontSize: "10px",
+                color: "#94a3b8",
+                fontWeight: 500,
+                lineHeight: "1.2",
+              }}
+            >
+              {userRole}
+            </span>
             <span data-testid="sidebar-user-status" style={{ display: "none" }}>
               ● Online
             </span>
           </div>
         )}
+        {!isCollapsed && (
+          <button
+            type="button"
+            data-testid="btn-sidebar-footer-settings"
+            onClick={toggleSettingsMenu}
+            title="Configurações & Parametrização"
+            aria-label="Configurações"
+            aria-expanded={isSettingsMenuOpen}
+            style={{
+              marginLeft: "auto",
+              width: "32px",
+              height: "32px",
+              flexShrink: 0,
+              borderRadius: "8px",
+              border: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
+                ? "1px solid #3b82f6"
+                : "1px solid #334155",
+              backgroundColor: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
+                ? "#1e293b"
+                : "#151e2e",
+              color: "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <SidebarIcon name="settings" size={14} style={{ color: "#94a3b8" }} />
+          </button>
+        )}
       </div>
 
-      <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-        <button
-          type="button"
-          data-testid="btn-sidebar-footer-settings"
-          onClick={toggleSettingsMenu}
-          title="Configurações & Parametrização"
-          aria-label="Configurações"
-          aria-expanded={isSettingsMenuOpen}
-          style={{
-            width: isCollapsed ? "32px" : "36px",
-            height: "32px",
-            borderRadius: "8px",
-            border: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
-              ? "1px solid #3b82f6"
-              : "1px solid #334155",
-            backgroundColor: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
-              ? "#1e293b"
-              : "#151e2e",
-            color: "#94a3b8",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <SidebarIcon name="settings" size={14} style={{ color: "#94a3b8" }} />
-        </button>
-
-        <button
-          type="button"
-          data-testid="btn-sidebar-logout"
-          onClick={logout}
-          title="Encerrar Sessão (Sair)"
-          aria-label="Sair do sistema"
-          style={{
-            width: isCollapsed ? "32px" : "36px",
-            height: "32px",
-            borderRadius: "8px",
-            border: "1px solid #334155",
-            backgroundColor: "#151e2e",
-            color: "#f28b82",
-            fontSize: "12px",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-        >
-          🚪
-        </button>
-      </div>
+      {isCollapsed && (
+        <div style={{ display: "flex", gap: "6px", width: "100%", justifyContent: "center" }}>
+          <button
+            type="button"
+            data-testid="btn-sidebar-footer-settings"
+            onClick={toggleSettingsMenu}
+            title="Configurações & Parametrização"
+            aria-label="Configurações"
+            aria-expanded={isSettingsMenuOpen}
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "8px",
+              border: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
+                ? "1px solid #3b82f6"
+                : "1px solid #334155",
+              backgroundColor: isSettingsOrRegionTab(activeTab) || isSettingsMenuOpen
+                ? "#1e293b"
+                : "#151e2e",
+              color: "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <SidebarIcon name="settings" size={14} style={{ color: "#94a3b8" }} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

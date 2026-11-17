@@ -31,6 +31,7 @@ export function SamplingQuotasFeature(): React.JSX.Element {
   const [previewSample, setPreviewSample] = useState<{ n: number; z: number; cotas: { dim: string; cat: string; pct: number; qtd: number }[] } | null>(null);
   const [lastSavedAmostraId, setLastSavedAmostraId] = useState<number | null>(null);
   const [selectedCotaId, setSelectedCotaId] = useState<number | null>(null);
+  const [editingAmostraId, setEditingAmostraId] = useState<number | null>(null);
 
   const [novaDimensao, setNovaDimensao] = useState("Bairro / Zona");
   const [novaCategoria, setNovaCategoria] = useState("");
@@ -134,8 +135,10 @@ export function SamplingQuotasFeature(): React.JSX.Element {
   const handleCreateAmostra = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (!idMunicipio) return;
-    const res = await fetch(`${API_BASE}/amostras`, {
-      method: "POST",
+    const url = editingAmostraId ? `${API_BASE}/amostras/${editingAmostraId}` : `${API_BASE}/amostras`;
+    const method = editingAmostraId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id_municipio: Number(idMunicipio),
@@ -144,17 +147,18 @@ export function SamplingQuotasFeature(): React.JSX.Element {
         margem_erro: Number(margemErro),
         populacao_universo: Number(populacao),
         tamanho_amostral: previewSample ? previewSample.n : (tamanhoManual ? Number(tamanhoManual) : null),
-        gerar_cotas_automaticas: true,
+        gerar_cotas_automaticas: !editingAmostraId,
         id_eleitorado_tse: idEleitoradoTse,
       }),
     });
     if (res.ok) {
       const created = await res.json();
       setPreviewSample(null);
+      setEditingAmostraId(null);
       await loadOpcoes();
       if (created?.id_amostra) {
         setSelectedAmostraId(created.id_amostra);
-        setLastSavedAmostraId(created.id_amostra);
+        if (!editingAmostraId) setLastSavedAmostraId(created.id_amostra);
       }
     }
   };
@@ -220,6 +224,9 @@ export function SamplingQuotasFeature(): React.JSX.Element {
       </div>
 
       <form onSubmit={handleCreateAmostra} style={{ backgroundColor: colors.surfaceContainerLow, border: `1px solid ${colors.borderSubtle}`, borderRadius: "14px", padding: "16px", display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
+        <div style={{ width: "100%", fontSize: "12.5px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>
+          Adicione a população do município para calcularmos a amostra adequada.
+        </div>
         <div>
           <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Município</div>
           <select style={INPUT_STYLE} value={idMunicipio} onChange={(e) => {
@@ -255,14 +262,37 @@ export function SamplingQuotasFeature(): React.JSX.Element {
         </div>
         <button
           type="button"
+          onClick={() => {
+            setEditingAmostraId(null);
+            setPreviewSample(null);
+            setDescricao("Amostra Municipal TSE 2026");
+            setNivelConfianca("95");
+            setMargemErro("4.9");
+            setTamanhoManual("");
+          }}
+          style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${colors.borderSubtle}`, backgroundColor: colors.surfaceContainer, color: colors.textPrimary, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+        >
+          + Nova Amostragem
+        </button>
+        <button
+          type="button"
           onClick={handleCalculatePreview}
           style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#fbbc04", color: "#3f2e00", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
         >
           Calcular
         </button>
         <button type="submit" style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#8ab4f8", color: "#003061", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>
-          Salvar no Banco
+          {editingAmostraId ? "Atualizar Amostra" : "Salvar no Banco"}
         </button>
+        {editingAmostraId && (
+          <button
+            type="button"
+            onClick={() => setEditingAmostraId(null)}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${colors.borderSubtle}`, backgroundColor: colors.surfaceContainer, color: colors.textPrimary, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+          >
+            Cancelar Edição
+          </button>
+        )}
         <button
           type="button"
           disabled={!lastSavedAmostraId}
@@ -348,7 +378,23 @@ export function SamplingQuotasFeature(): React.JSX.Element {
                   <td style={{ padding: "6px", color: "#8ab4f8", fontWeight: 600 }}>{a.tamanho_amostral}</td>
                   <td style={{ padding: "6px" }}>{a.nivel_confianca}% / {a.margem_erro}%</td>
                   <td style={{ padding: "6px" }}>{Number(a.populacao_universo).toLocaleString("pt-BR")}</td>
-                  <td style={{ padding: "6px", textAlign: "right" }}>
+                  <td style={{ padding: "6px", textAlign: "right", display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingAmostraId(a.id_amostra);
+                        setIdMunicipio(String(a.id_municipio));
+                        setDescricao(a.descricao);
+                        setNivelConfianca(String(a.nivel_confianca));
+                        setMargemErro(String(a.margem_erro));
+                        setPopulacao(String(a.populacao_universo));
+                        setTamanhoManual(String(a.tamanho_amostral));
+                      }}
+                      style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #353535", backgroundColor: "#2a2a2a", color: "#fbbc04", fontSize: "11px", cursor: "pointer" }}
+                    >
+                      ✏️ Editar
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSelectedAmostraId(a.id_amostra)}

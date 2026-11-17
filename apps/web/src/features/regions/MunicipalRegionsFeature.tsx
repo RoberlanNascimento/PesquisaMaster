@@ -33,6 +33,42 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRegion, setEditingRegion] = useState<MunicipalRegionRecord | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [dbStates, setDbStates] = useState(states);
+  const [dbMunicipalities, setDbMunicipalities] = useState(municipalities);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/v1/amostragem/opcoes", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : ({} as any)))
+      .then((d) => {
+        if (Array.isArray(d?.municipios) && d.municipios.length > 0) {
+          const ufs = Array.from(new Set(d.municipios.map((m: any) => String(m.uf)))) as string[];
+          setDbStates(
+            ufs.map((uf) => ({
+              id: `uf-${uf}`,
+              countryId: "br",
+              uf,
+              name: uf,
+              ibgeCode: "",
+              macroRegion: "NORTE",
+              electorateTotal: 0,
+              isActive: true,
+            }))
+          );
+          setDbMunicipalities(
+            d.municipios.map((m: any) => ({
+              id: String(m.id_municipio),
+              stateId: `uf-${m.uf}`,
+              stateUf: m.uf,
+              name: m.nome,
+              ibgeCode: "",
+              electorateTotal: Number(m.eleitorado_total) || 0,
+              isActive: true,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [pendingDeleteRegion, setPendingDeleteRegion] = useState<MunicipalRegionRecord | null>(null);
   const [pendingSaveData, setPendingSaveData] = useState<MunicipalRegionFormData | null>(null);
 
@@ -107,10 +143,10 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
         setFilterMunicipalityId,
         filterZone,
         setFilterZone,
-        states,
-        municipalities
+        dbStates,
+        dbMunicipalities
       ),
-    [filterStateId, filterMunicipalityId, filterZone, states, municipalities]
+    [filterStateId, filterMunicipalityId, filterZone, dbStates, dbMunicipalities]
   );
 
   const handleConfirmDelete = async (): Promise<void> => {
@@ -170,8 +206,8 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
       <RegionsFeedbackToast message={toast} testId="regions-feedback-toast" />
 
       <EnterpriseCrudWorkspace<MunicipalRegionRecord>
-        title="Gerenciamento de Regiões Municipais e Bairros (Plano Diretor)"
-        subtitle="Cadastro exclusivo de Regiões Municipais com combobox em cascata: País (Brasil) -> Estado (UF) -> Município"
+        title="Zonas Municipais"
+        subtitle="Cadastro de Zonas Municipais: País -> Estado (UF) -> Município"
         globalActions={
           <button
             type="button"

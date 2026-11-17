@@ -79,7 +79,7 @@ export function MunicipalityDrawerForm({
     <SlideOverDrawer
       isOpen={isOpen}
       title={editing ? `Editar Município (${editing.name}/${editing.uf})` : "Novo Município vinculado ao Estado"}
-      subtitle="Selecione País e Estado (UF) no combobox e defina a Lei do Plano Diretor Municipal"
+      subtitle="Selecione País e Estado (UF) e defina a Lei do Plano Diretor Municipal"
       onClose={onClose}
       footerActions={
         <>
@@ -107,7 +107,7 @@ export function MunicipalityDrawerForm({
             </select>
           </div>
           <div>
-            <label style={CRUD_LABEL_STYLE}>2. Estado / UF (Combobox)</label>
+            <label style={CRUD_LABEL_STYLE}>2. Estado / UF</label>
             <select data-testid="select-municipality-state" value={stateId} onChange={(e) => setStateId(e.target.value)} style={CRUD_INPUT_STYLE}>
               {drawerStates.map((s) => <option key={s.id} value={s.id}>{s.uf} — {s.name}</option>)}
             </select>
