@@ -14,8 +14,8 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Element {
-  const [email, setEmail] = useState("admin@dataopinion.com.br");
-  const [senha, setSenha] = useState("");
+  const [email, setEmail] = useState("iwcosta@gmail.com");
+  const [senha, setSenha] = useState("123456");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

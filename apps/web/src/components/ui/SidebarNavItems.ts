@@ -22,15 +22,6 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
     path: "/overview",
     label: "Dashboard",
     icon: "overview",
-    subtitle: "Apresentação da última pesquisa",
-    subItems: [
-      {
-        id: "overview",
-        path: "/overview",
-        label: "Apresentação da última pesquisa",
-        icon: "overview",
-      },
-    ],
   },
   {
     id: "sampling-group",
@@ -179,7 +170,6 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
     path: "/despacho-tse",
     label: "Despacho TSE",
     icon: "dispatch-tse",
-    subtitle: "Registro, Assinatura e Blindagem",
     subItems: [
       {
         id: "tse-planning",

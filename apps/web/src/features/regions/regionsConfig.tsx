@@ -24,24 +24,8 @@ export const ZONE_LABELS: Record<UrbanZoneType, string> = {
 export function getRegionTabs(
   regions: readonly MunicipalRegionRecord[]
 ): readonly WorkspaceTab[] {
-  const totalNeighborhoods = regions.reduce((acc, r) => acc + r.neighborhoods.length, 0);
   return [
     { id: "ALL", label: "Todas as Regiões", count: regions.length },
-    {
-      id: "ACTIVE",
-      label: "Ativas no Plano Amostral",
-      count: regions.filter((r) => r.isActive).length,
-    },
-    {
-      id: "METROPOLITAN",
-      label: "Capital (São Paulo)",
-      count: regions.filter((r) => r.cityName === "São Paulo").length,
-    },
-    {
-      id: "WITH_NEIGHBORHOODS",
-      label: `Bairros Mapeados (${totalNeighborhoods})`,
-      count: regions.filter((r) => r.neighborhoods.length > 0).length,
-    },
   ];
 }
 
@@ -87,8 +71,8 @@ export function getRegionFilters(
   setFilterStateId: (v: string) => void,
   filterMunicipalityId: string,
   setFilterMunicipalityId: (v: string) => void,
-  filterZone: string,
-  setFilterZone: (v: string) => void,
+  _filterZone: string,
+  _setFilterZone: (v: string) => void,
   states: readonly StateRecord[],
   municipalities: readonly MunicipalityRecord[]
 ): readonly WorkspaceFilterConfig[] {
@@ -119,22 +103,6 @@ export function getRegionFilters(
       options: [
         { value: "ALL", label: "Todos os Municípios" },
         ...visibleMuns.map((m) => ({ value: m.id, label: `${m.name} / ${m.uf}` })),
-      ],
-    },
-    {
-      id: "zone",
-      label: "Macrozona Urbana",
-      value: filterZone,
-      onChange: setFilterZone,
-      options: [
-        { value: "ALL", label: "Todas as Macrozonas" },
-        { value: "ZONA_CENTRAL", label: "Zona Central" },
-        { value: "ZONA_SUL", label: "Zona Sul" },
-        { value: "ZONA_LESTE", label: "Zona Leste" },
-        { value: "ZONA_NORTE", label: "Zona Norte" },
-        { value: "ZONA_OESTE", label: "Zona Oeste" },
-        { value: "ZONA_EXPANSAO_URBANA", label: "Expansão Urbana" },
-        { value: "ZONA_RURAL", label: "Zona Rural" },
       ],
     },
   ];

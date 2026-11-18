@@ -49,6 +49,102 @@ class ReatribuicaoCreateSchema(BaseModel):
     id_organizacao: int | None = None
 
 
+@campo_operacoes_router.get("/dashboard-stats")
+async def get_dashboard_stats(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    res = await session.execute(
+        text(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM pesquisas) AS total_pesquisas,
+                (SELECT COUNT(*)::int FROM municipios) AS total_cidades,
+                (SELECT COALESCE(SUM(COALESCE(NULLIF(populacao_total, 0), eleitorado_total, 0)), 0)::bigint FROM municipios) AS populacao_municipios,
+                (SELECT COUNT(*)::int FROM questionarios_pessoas) AS entrevistas_realizadas,
+                (SELECT COALESCE(SUM(tamanho_amostral), 0)::int FROM amostras) AS entrevistas_planejadas
+            """
+        )
+    )
+    row = res.mappings().first() or {}
+    realizadas = int(row.get("entrevistas_realizadas") or 0)
+    planejadas = int(row.get("entrevistas_planejadas") or 0)
+
+    pesq_res = await session.execute(
+        text(
+            """
+            SELECT p.id_pesquisa, p.nome, p.numero_registro_tse, p.data_inicio, p.data_fim,
+                   p.status::text, m.nome AS municipio_nome, e.sigla AS uf,
+                   COALESCE(a.tamanho_amostral, 0) AS tamanho_amostral,
+                   COALESCE(a.margem_erro, 0) AS margem_erro
+            FROM pesquisas p
+            LEFT JOIN municipios m ON m.id_municipio = p.id_municipio
+            LEFT JOIN estados e ON e.id_estado = m.id_estado
+            LEFT JOIN amostras a ON a.id_amostra = p.id_amostra
+            ORDER BY p.id_pesquisa DESC
+            """
+        )
+    )
+    votos_res = await session.execute(
+        text(
+            """
+            SELECT qp.id_pesquisa,
+                   r.id_cenario,
+                   COALESCE(cp.identificador, 'Cenário Principal') AS cenario_nome,
+                   COALESCE(cp.tipo_cenario, 'estimulado') AS tipo_cenario,
+                   COALESCE(c.nome_urna_comercial, 'Branco / Nulo / Não sabe') AS candidato,
+                   COALESCE(c.sigla_partido_marca, 'NS/NR') AS partido,
+                   COALESCE(c.cor_hex, '#64748b') AS cor_hex,
+                   COUNT(*)::int AS votos
+            FROM respostas r
+            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN cenarios_pesquisa cp ON cp.id_cenario = r.id_cenario
+            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            WHERE r.tipo_registro = 'voto_direto'
+            GROUP BY qp.id_pesquisa, r.id_cenario, cp.identificador, cp.tipo_cenario, c.nome_urna_comercial, c.sigla_partido_marca, c.cor_hex
+            ORDER BY r.id_cenario ASC NULLS LAST, votos DESC
+            """
+        )
+    )
+    rejeicao_res = await session.execute(
+        text(
+            """
+            SELECT qp.id_pesquisa,
+                   COALESCE(c.nome_urna_comercial, 'Não rejeita / Não sabe') AS candidato,
+                   COALESCE(c.sigla_partido_marca, 'NS/NR') AS partido,
+                   COALESCE(c.cor_hex, '#64748b') AS cor_hex,
+                   COUNT(*)::int AS votos
+            FROM respostas r
+            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            WHERE r.tipo_registro = 'rejeicao'
+            GROUP BY qp.id_pesquisa, c.nome_urna_comercial, c.sigla_partido_marca, c.cor_hex
+            ORDER BY votos DESC
+            """
+        )
+    )
+    rel_res = await session.execute(
+        text(
+            """
+            SELECT id_relatorio, id_pesquisa, titulo_relatorio, configuracao_crosstab, criado_em
+            FROM relatorios_tabulacao
+            ORDER BY id_relatorio DESC
+            """
+        )
+    )
+
+    return {
+        "total_pesquisas": int(row.get("total_pesquisas") or 0),
+        "total_cidades": int(row.get("total_cidades") or 0),
+        "populacao_municipios": int(row.get("populacao_municipios") or 0),
+        "total_entrevistas": realizadas if realizadas > 0 else planejadas,
+        "entrevistas_realizadas": realizadas,
+        "pesquisas": [dict(r) for r in pesq_res.mappings().all()],
+        "resultados_votos": [dict(r) for r in votos_res.mappings().all()],
+        "rejeicao_votos": [dict(r) for r in rejeicao_res.mappings().all()],
+        "relatorios": [dict(r) for r in rel_res.mappings().all()],
+    }
+
+
 @campo_operacoes_router.get("/resumo-opcoes")
 async def get_resumo_opcoes(
     session: AsyncSession = Depends(get_db_session),

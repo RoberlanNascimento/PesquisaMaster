@@ -168,13 +168,23 @@ async def create_amostra(
 
     if payload.gerar_cotas_automaticas:
         bairro_res = await session.execute(
-            text("SELECT id_bairro FROM bairros_ibge WHERE id_municipio = :mid AND ativo = true ORDER BY id_bairro ASC LIMIT 1"),
+            text(
+                """
+                SELECT id_bairro, nome_bairro,
+                       COALESCE(NULLIF(eleitorado_total, 0), NULLIF(populacao_total, 0), 1) AS peso
+                FROM bairros_ibge
+                WHERE id_municipio = :mid AND ativo = true
+                ORDER BY id_bairro ASC
+                """
+            ),
             {"mid": payload.id_municipio},
         )
-        default_bairro_id = bairro_res.scalar_one_or_none()
-        if default_bairro_id is None:
-            any_b = await session.execute(text("SELECT id_bairro FROM bairros_ibge ORDER BY id_bairro ASC LIMIT 1"))
-            default_bairro_id = any_b.scalar_one_or_none() or 1
+        bairros_list = [dict(r) for r in bairro_res.mappings().all()]
+        if not bairros_list:
+            any_b = await session.execute(text("SELECT id_bairro, nome_bairro, 1 AS peso FROM bairros_ibge ORDER BY id_bairro ASC LIMIT 1"))
+            bairros_list = [dict(r) for r in any_b.mappings().all()] or [{"id_bairro": 1, "nome_bairro": "Geral", "peso": 1}]
+
+        pesos_bairros = [float(b["peso"]) for b in bairros_list]
 
         defaults = [
             ("Sexo", "TSE", 1, [("Feminino", 52.8), ("Masculino", 47.2)]),
@@ -192,17 +202,21 @@ async def create_amostra(
                 {"id_amostra": id_amostra, "nome": nome_dim, "fonte": fonte, "ordem": ordem},
             )
             id_dim = dim_res.scalar_one()
-            allocs = _hare_niemeyer(final_n, [c[1] for c in cats])
-            for (cat_name, pct), qtd in zip(cats, allocs):
-                await session.execute(
-                    text(
-                        """
-                        INSERT INTO amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
-                        VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, 1)
-                        """
-                    ),
-                    {"id_dim": id_dim, "id_bairro": default_bairro_id, "cat": cat_name, "pct": pct, "qtd": qtd},
-                )
+            allocs_cat = _hare_niemeyer(final_n, [c[1] for c in cats])
+            for (cat_name, pct), qtd_cat in zip(cats, allocs_cat):
+                allocs_bairro = _hare_niemeyer(qtd_cat, pesos_bairros)
+                for b, qtd_b in zip(bairros_list, allocs_bairro):
+                    if qtd_b <= 0:
+                        continue
+                    await session.execute(
+                        text(
+                            """
+                            INSERT INTO amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
+                            VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, 1)
+                            """
+                        ),
+                        {"id_dim": id_dim, "id_bairro": b["id_bairro"], "cat": cat_name, "pct": pct, "qtd": qtd_b},
+                    )
 
     await session.commit()
     return amostra_row

@@ -6,7 +6,6 @@ import { useUiSessionStore } from "../../lib/store";
 import type { MunicipalRegionRecord, MunicipalRegionFormData, UrbanZoneType } from "./regionsData";
 import {
   getRegionTabs,
-  getRegionKpis,
   getRegionFilters,
   REGION_COLUMNS,
 } from "./regionsConfig";
@@ -58,7 +57,7 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
             d.municipios.map((m: any) => ({
               id: String(m.id_municipio),
               stateId: `uf-${m.uf}`,
-              stateUf: m.uf,
+              uf: m.uf,
               name: m.nome,
               ibgeCode: "",
               electorateTotal: Number(m.eleitorado_total) || 0,
@@ -108,8 +107,8 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
 
   const filteredRegions = useMemo(() => {
     return regions.filter((r) => {
-      if (filterStateId !== "ALL" && r.stateId !== filterStateId) return false;
-      if (filterMunicipalityId !== "ALL" && r.municipalityId !== filterMunicipalityId) return false;
+      if (filterStateId !== "ALL" && r.stateId !== filterStateId && `uf-${r.uf}` !== filterStateId) return false;
+      if (filterMunicipalityId !== "ALL" && r.municipalityId !== filterMunicipalityId && r.municipalityId !== `mun-${filterMunicipalityId}`) return false;
       if (filterZone !== "ALL" && r.masterPlanZone !== filterZone) return false;
       if (activeTab === "ACTIVE" && !r.isActive) return false;
       if (activeTab === "METROPOLITAN" && r.cityName !== "São Paulo") return false;
@@ -130,10 +129,6 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
   }, [regions, filterStateId, filterMunicipalityId, filterZone, activeTab, search]);
 
   const tabs = useMemo(() => getRegionTabs(regions), [regions]);
-  const kpis = useMemo(
-    () => getRegionKpis(regions, states.length, municipalities.length),
-    [regions, states.length, municipalities.length]
-  );
   const filters = useMemo(
     () =>
       getRegionFilters(
@@ -170,9 +165,9 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
 
     try {
       const bodyJson = JSON.stringify({
-        id_municipio: 1,
+        id_municipio: Number(data.municipalityId) || 1,
         nome_regiao: data.name,
-        sigla: data.code.replace(/^REG-[A-Z]+-/, "") || data.code,
+        sigla: (data.code.replace(/^REG-[A-Z]+-/, "") || data.code).slice(0, 10),
         descricao: data.masterPlanLawRef,
         ativo: true,
       });
@@ -221,7 +216,7 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        kpis={kpis}
+        kpis={[]}
         searchPlaceholder="Buscar por código, região, município, UF ou bairro..."
         searchValue={search}
         onSearchChange={setSearch}
@@ -251,8 +246,8 @@ export function MunicipalRegionsFeature(): React.JSX.Element {
         onClose={() => setDrawerOpen(false)}
         initialData={editingRegion}
         countries={countries}
-        states={states}
-        municipalities={municipalities}
+        states={dbStates}
+        municipalities={dbMunicipalities}
         defaultMunicipalityId={filterMunicipalityId !== "ALL" ? filterMunicipalityId : undefined}
         onSave={(data) => setPendingSaveData(data)}
       />

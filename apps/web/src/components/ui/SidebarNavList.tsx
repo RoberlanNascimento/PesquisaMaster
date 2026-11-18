@@ -40,8 +40,6 @@ export function SidebarNavList({
     >
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "6px" }}>
         {PRIMARY_NAV_ITEMS.map((item) => {
-          const isTseDispatch = item.id === "dispatch-tse-group";
-          const isDashboard = item.id === "overview";
           const isActive =
             activeTab === item.id ||
             Boolean(
@@ -52,86 +50,6 @@ export function SidebarNavList({
               ),
             );
           const isGroupOpen = !isCollapsed && expandedGroupId === item.id;
-
-          // Estilo especial do Despacho TSE (Card Dourado/Oliva)
-          if (isTseDispatch && !isCollapsed) {
-            return (
-              <li key={item.id} style={{ marginTop: "6px" }}>
-                <button
-                  type="button"
-                  title={item.label}
-                  data-testid={`nav-${item.id}`}
-                  onClick={() => onTopItemClick(item)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "9px 12px",
-                    borderRadius: "10px",
-                    border: "1px solid rgba(234, 179, 8, 0.4)",
-                    background: "linear-gradient(135deg, rgba(38, 42, 20, 0.85) 0%, rgba(52, 56, 24, 0.85) 100%)",
-                    color: "#fef08a",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    transition: "all 0.15s ease",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-                  }}
-                >
-                  <SidebarIcon name={item.icon} size={18} style={{ color: "#facc15" }} />
-                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#fef08a" }}>
-                      {item.label}
-                    </span>
-                    <span style={{ fontSize: "10.5px", color: "#eab308", opacity: 0.9 }}>
-                      {item.subtitle}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            );
-          }
-
-          // Estilo especial do Dashboard com subtítulo
-          if (isDashboard && !isCollapsed) {
-            return (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  title={item.label}
-                  data-testid={`nav-${item.id}`}
-                  onClick={() => onTopItemClick(item)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 12px",
-                    borderRadius: "10px",
-                    border: isActive ? `1px solid ${colors.borderSubtle}` : "1px solid transparent",
-                    backgroundColor: isActive ? "#1e293b" : "transparent",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    transition: "background 0.15s ease",
-                  }}
-                >
-                  <SidebarIcon
-                    name="overview"
-                    size={18}
-                    style={{ color: isActive ? "#38bdf8" : "#94a3b8" }}
-                  />
-                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: colors.textPrimary }}>
-                      {item.label}
-                    </span>
-                    <span style={{ fontSize: "10.5px", color: colors.textMuted }}>
-                      {item.subtitle}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            );
-          }
 
           return (
             <li key={item.id}>
@@ -148,7 +66,7 @@ export function SidebarNavList({
                     name={item.icon}
                     size={17}
                     style={{
-                      color: isActive ? "#38bdf8" : "#94a3b8",
+                      color: isActive ? "#d1d5db" : "#ffffff",
                       transition: "color 0.15s ease",
                     }}
                   />

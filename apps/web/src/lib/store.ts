@@ -99,9 +99,9 @@ interface UiSessionState {
 }
 
 export const useUiSessionStore = create<UiSessionState>((set, get) => ({
-  isAuthenticated: initialStoredUser !== null,
-  currentUser: initialStoredUser,
-  activeTenantId: initialStoredUser?.tenantId ?? "comp-001",
+  isAuthenticated: false,
+  currentUser: null,
+  activeTenantId: "comp-001",
   activeTab: "overview",
   currentPath: "/overview",
   isSidebarCollapsed: false,
@@ -162,11 +162,19 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
           });
           return { success: true };
         }
+        const errBody = (await res.json().catch(() => ({}))) as { detail?: string };
+        return {
+          success: false,
+          error: errBody.detail ?? "Credenciais inválidas. Utilize e-mail e senha cadastrados no banco de dados.",
+        };
       } catch {
-        // Fallback to mock when backend is unavailable
+        return {
+          success: false,
+          error: "Não foi possível conectar ao servidor de autenticação.",
+        };
       }
     }
-    if (normEmail === "iwcosta@gmail.com" && pass === "123456") {
+    if (isTestEnv && normEmail === "iwcosta@gmail.com" && pass === "123456") {
       const user = MOCK_USER_IWCOSTA;
       if (typeof window !== "undefined") {
         localStorage.setItem("pm_auth_user", JSON.stringify(user));
