@@ -1,5 +1,6 @@
 """Rotas de Planejamento Amostral, Dimensões e Cotas (Hare-Niemeyer) conectadas ao PostgreSQL."""
 
+import hashlib
 import math
 from typing import Any
 
@@ -23,6 +24,7 @@ class AmostraCreateSchema(BaseModel):
     margem_erro: float = 4.9
     proporcao_esperada: float = 50.0
     populacao_universo: int = 100000
+    z_score: float | None = None
     tamanho_amostral: int | None = None
     metodo_alocacao: str = "hare_niemeyer"
     gerar_cotas_automaticas: bool = True
@@ -40,6 +42,23 @@ class CotaCreateSchema(BaseModel):
     id_bairro: int | None = None
     percentual_meta: float
     quantidade_meta: int
+
+
+class EleitoradoTseSchema(BaseModel):
+    id_municipio: int
+    id_bairro: int | None = None
+    ano_referencia: int
+    mes_referencia: int
+    zona_eleitoral: str | None = None
+    secao_eleitoral: str | None = None
+    quantidade_eleitores: int
+    eleitores_biometria: int = 0
+    populacao_ibge: int | None = None
+    ano_censo_ibge: int | None = None
+    tipo_captura: str = "manual"
+    fonte_endpoint: str | None = None
+    id_usuario_captura: int | None = None
+    hash_origem: str | None = None
 
 
 def _z_from_confidence(conf: float) -> float:
@@ -94,8 +113,10 @@ async def get_amostragem_opcoes(
         text(
             """
             SELECT a.id_amostra, a.id_municipio, a.descricao, a.nivel_confianca,
-                   a.margem_erro, a.populacao_universo, a.tamanho_amostral,
-                   a.metodo_alocacao, a.calculado_em, m.nome AS municipio_nome, e.sigla AS uf
+                   a.margem_erro, a.proporcao_esperada, a.populacao_universo,
+                   a.z_score, a.tamanho_amostral, a.metodo_alocacao,
+                   a.id_eleitorado_tse, a.calculado_em,
+                   m.nome AS municipio_nome, e.sigla AS uf
             FROM amostras a
             LEFT JOIN municipios m ON m.id_municipio = a.id_municipio
             LEFT JOIN estados e ON e.id_estado = m.id_estado
@@ -115,10 +136,37 @@ async def get_amostragem_opcoes(
             """
         )
     )
+    eleitorados_tse = await session.execute(
+        text(
+            """
+            SELECT et.id_eleitorado_tse, et.id_municipio, et.id_bairro,
+                   et.ano_referencia, et.mes_referencia,
+                   et.zona_eleitoral, et.secao_eleitoral,
+                   et.quantidade_eleitores, et.eleitores_biometria,
+                   et.populacao_ibge, et.ano_censo_ibge,
+                   et.tipo_captura, et.fonte_endpoint,
+                   et.id_usuario_captura, et.data_captura,
+                   et.hash_origem, et.id_organizacao,
+                   m.nome AS municipio_nome, e.sigla AS uf,
+                   b.nome_bairro, u.nome AS usuario_nome
+            FROM eleitorado_tse et
+            LEFT JOIN municipios m ON m.id_municipio = et.id_municipio
+            LEFT JOIN estados e ON e.id_estado = m.id_estado
+            LEFT JOIN bairros_ibge b ON b.id_bairro = et.id_bairro
+            LEFT JOIN usuarios u ON u.id_usuario = et.id_usuario_captura
+            ORDER BY et.ano_referencia DESC, et.mes_referencia DESC, et.data_captura DESC, et.id_eleitorado_tse DESC
+            """
+        )
+    )
+    usuarios = await session.execute(
+        text("SELECT id_usuario, nome FROM usuarios ORDER BY id_usuario ASC")
+    )
     return {
         "municipios": [dict(r) for r in muns.mappings().all()],
         "amostras": [dict(r) for r in amostras.mappings().all()],
         "bairros": [dict(r) for r in bairros.mappings().all()],
+        "eleitorados_tse": [dict(r) for r in eleitorados_tse.mappings().all()],
+        "usuarios": [dict(r) for r in usuarios.mappings().all()],
     }
 
 
@@ -127,12 +175,13 @@ async def create_amostra(
     payload: AmostraCreateSchema,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    z, calc_n = _calc_sample_size(
+    z_calc, calc_n = _calc_sample_size(
         payload.populacao_universo,
         payload.nivel_confianca,
         payload.margem_erro,
         payload.proporcao_esperada,
     )
+    z = payload.z_score if payload.z_score and payload.z_score > 0 else z_calc
     final_n = payload.tamanho_amostral if payload.tamanho_amostral and payload.tamanho_amostral > 0 else calc_n
 
     res = await session.execute(
@@ -289,6 +338,23 @@ async def create_cota_manual(
         )
         id_dim = new_dim.scalar_one()
 
+    id_bairro = payload.id_bairro
+    if id_bairro is None:
+        b_res = await session.execute(
+            text(
+                """
+                SELECT b.id_bairro
+                FROM bairros_ibge b
+                JOIN amostras a ON a.id_municipio = b.id_municipio
+                WHERE a.id_amostra = :id_amostra AND b.ativo = true
+                ORDER BY b.id_bairro ASC
+                LIMIT 1
+                """
+            ),
+            {"id_amostra": id_amostra},
+        )
+        id_bairro = b_res.scalar_one_or_none() or 1
+
     res = await session.execute(
         text(
             """
@@ -299,7 +365,7 @@ async def create_cota_manual(
         ),
         {
             "id_dim": id_dim,
-            "id_bairro": payload.id_bairro,
+            "id_bairro": id_bairro,
             "cat": payload.categoria,
             "pct": payload.percentual_meta,
             "qtd": payload.quantidade_meta,
@@ -348,13 +414,15 @@ async def update_amostra(
     payload: AmostraCreateSchema,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    z, calc_n = _calc_sample_size(
+    z_calc, calc_n = _calc_sample_size(
         payload.populacao_universo,
         payload.nivel_confianca,
         payload.margem_erro,
         payload.proporcao_esperada,
     )
+    z = payload.z_score if payload.z_score and payload.z_score > 0 else z_calc
     final_n = payload.tamanho_amostral if payload.tamanho_amostral and payload.tamanho_amostral > 0 else calc_n
+    prop_db = payload.proporcao_esperada / 100.0 if payload.proporcao_esperada > 1 else payload.proporcao_esperada
     res = await session.execute(
         text(
             """
@@ -363,9 +431,12 @@ async def update_amostra(
                 descricao = :descricao,
                 nivel_confianca = :nivel_confianca,
                 margem_erro = :margem_erro,
+                proporcao_esperada = :proporcao_esperada,
                 populacao_universo = :populacao_universo,
                 z_score = :z_score,
-                tamanho_amostral = :tamanho_amostral
+                tamanho_amostral = :tamanho_amostral,
+                metodo_alocacao = :metodo_alocacao,
+                id_eleitorado_tse = :id_eleitorado_tse
             WHERE id_amostra = :id_amostra
             RETURNING id_amostra, id_municipio, descricao, tamanho_amostral, metodo_alocacao
             """
@@ -376,9 +447,12 @@ async def update_amostra(
             "descricao": payload.descricao,
             "nivel_confianca": payload.nivel_confianca,
             "margem_erro": payload.margem_erro,
+            "proporcao_esperada": prop_db,
             "populacao_universo": payload.populacao_universo,
             "z_score": z,
             "tamanho_amostral": final_n,
+            "metodo_alocacao": payload.metodo_alocacao,
+            "id_eleitorado_tse": payload.id_eleitorado_tse,
         },
     )
     await session.commit()
@@ -393,6 +467,15 @@ async def delete_amostra(
     id_amostra: int,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
+    linked = await session.execute(
+        text("SELECT COUNT(*) FROM pesquisas WHERE id_amostra = :id_amostra"),
+        {"id_amostra": id_amostra},
+    )
+    if (linked.scalar_one() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível excluir esta amostra pois ela está vinculada a uma pesquisa.",
+        )
     await session.execute(
         text(
             """
@@ -411,5 +494,151 @@ async def delete_amostra(
     await session.execute(
         text("DELETE FROM amostras WHERE id_amostra = :id_amostra"),
         {"id_amostra": id_amostra},
+    )
+    await session.commit()
+
+
+async def _prepare_eleitorado_params(
+    payload: EleitoradoTseSchema,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    tipo = (payload.tipo_captura or "manual").strip().lower()
+    if tipo not in ("manual", "automatica"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="tipo_captura deve ser 'manual' ou 'automatica'.",
+        )
+    if not (1 <= payload.mes_referencia <= 12):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="mes_referencia deve estar entre 1 e 12.",
+        )
+
+    id_usuario = payload.id_usuario_captura
+    fonte = (payload.fonte_endpoint or "").strip() or None
+
+    if tipo == "manual" and id_usuario is None:
+        u_res = await session.execute(text("SELECT id_usuario FROM usuarios ORDER BY id_usuario ASC LIMIT 1"))
+        id_usuario = u_res.scalar_one_or_none()
+        if id_usuario is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="id_usuario_captura é obrigatório para captura manual.",
+            )
+
+    if tipo == "automatica" and not fonte:
+        fonte = "https://dadosabertos.tse.jus.br"
+
+    hash_val = (payload.hash_origem or "").strip() or hashlib.sha256(
+        f"{payload.id_municipio}|{payload.ano_referencia}-{payload.mes_referencia}|{payload.quantidade_eleitores}|{tipo}".encode("utf-8")
+    ).hexdigest()
+
+    return {
+        "id_municipio": payload.id_municipio,
+        "id_bairro": payload.id_bairro,
+        "ano_referencia": payload.ano_referencia,
+        "mes_referencia": payload.mes_referencia,
+        "zona_eleitoral": (payload.zona_eleitoral or "").strip() or None,
+        "secao_eleitoral": (payload.secao_eleitoral or "").strip() or None,
+        "quantidade_eleitores": max(payload.quantidade_eleitores, 0),
+        "eleitores_biometria": max(payload.eleitores_biometria, 0),
+        "populacao_ibge": payload.populacao_ibge,
+        "ano_censo_ibge": payload.ano_censo_ibge,
+        "tipo_captura": tipo,
+        "fonte_endpoint": fonte,
+        "id_usuario_captura": id_usuario,
+        "hash_origem": hash_val[:64],
+    }
+
+
+@amostragem_router.post("/eleitorado-tse", status_code=status.HTTP_201_CREATED)
+async def create_eleitorado_tse(
+    payload: EleitoradoTseSchema,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    params = await _prepare_eleitorado_params(payload, session)
+    res = await session.execute(
+        text(
+            """
+            INSERT INTO eleitorado_tse (
+                id_municipio, id_bairro, ano_referencia, mes_referencia,
+                zona_eleitoral, secao_eleitoral, quantidade_eleitores,
+                eleitores_biometria, populacao_ibge, ano_censo_ibge,
+                tipo_captura, fonte_endpoint, id_usuario_captura,
+                data_captura, hash_origem, id_organizacao
+            ) VALUES (
+                :id_municipio, :id_bairro, :ano_referencia, :mes_referencia,
+                :zona_eleitoral, :secao_eleitoral, :quantidade_eleitores,
+                :eleitores_biometria, :populacao_ibge, :ano_censo_ibge,
+                :tipo_captura, :fonte_endpoint, :id_usuario_captura,
+                NOW(), :hash_origem, 1
+            )
+            RETURNING id_eleitorado_tse, id_municipio, ano_referencia, mes_referencia,
+                      quantidade_eleitores, tipo_captura, data_captura
+            """
+        ),
+        params,
+    )
+    await session.commit()
+    return dict(res.mappings().first() or {})
+
+
+@amostragem_router.put("/eleitorado-tse/{id_eleitorado_tse}")
+async def update_eleitorado_tse(
+    id_eleitorado_tse: int,
+    payload: EleitoradoTseSchema,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    params = await _prepare_eleitorado_params(payload, session)
+    params["id_eleitorado_tse"] = id_eleitorado_tse
+    res = await session.execute(
+        text(
+            """
+            UPDATE eleitorado_tse
+            SET id_municipio = :id_municipio,
+                id_bairro = :id_bairro,
+                ano_referencia = :ano_referencia,
+                mes_referencia = :mes_referencia,
+                zona_eleitoral = :zona_eleitoral,
+                secao_eleitoral = :secao_eleitoral,
+                quantidade_eleitores = :quantidade_eleitores,
+                eleitores_biometria = :eleitores_biometria,
+                populacao_ibge = :populacao_ibge,
+                ano_censo_ibge = :ano_censo_ibge,
+                tipo_captura = :tipo_captura,
+                fonte_endpoint = :fonte_endpoint,
+                id_usuario_captura = :id_usuario_captura,
+                hash_origem = :hash_origem
+            WHERE id_eleitorado_tse = :id_eleitorado_tse
+            RETURNING id_eleitorado_tse, id_municipio, ano_referencia, mes_referencia,
+                      quantidade_eleitores, tipo_captura, data_captura
+            """
+        ),
+        params,
+    )
+    await session.commit()
+    row = res.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de eleitorado TSE não encontrado.")
+    return dict(row)
+
+
+@amostragem_router.delete("/eleitorado-tse/{id_eleitorado_tse}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_eleitorado_tse(
+    id_eleitorado_tse: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    linked = await session.execute(
+        text("SELECT COUNT(*) FROM amostras WHERE id_eleitorado_tse = :id"),
+        {"id": id_eleitorado_tse},
+    )
+    if (linked.scalar_one() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível excluir este registro pois ele está vinculado a uma amostra.",
+        )
+    await session.execute(
+        text("DELETE FROM eleitorado_tse WHERE id_eleitorado_tse = :id"),
+        {"id": id_eleitorado_tse},
     )
     await session.commit()

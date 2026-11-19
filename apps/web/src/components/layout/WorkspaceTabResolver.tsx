@@ -7,6 +7,7 @@ import { SurveyCompositionFeature } from "../../features/surveys/SurveyCompositi
 import { CandidatesManagementFeature } from "../../features/catalog/CandidatesManagementFeature";
 import { SamplingQuotasFeature } from "../../features/sampling/SamplingQuotasFeature";
 import { SamplingDimensionsFeature } from "../../features/sampling/SamplingDimensionsFeature";
+import { TseIbgeCapturesFeature } from "../../features/sampling/TseIbgeCapturesFeature";
 import { QuestionnairesBuilderFeature } from "../../features/questionnaires/QuestionnairesBuilderFeature";
 import { QuestionsCatalogFeature } from "../../features/catalog/QuestionsCatalogFeature";
 import { ScalesCatalogFeature } from "../../features/catalog/ScalesCatalogFeature";
@@ -74,6 +75,9 @@ export function WorkspaceTabResolver({ activeTab }: WorkspaceTabResolverProps): 
 
     case "sampling-dimensions":
       return <SamplingDimensionsFeature />;
+
+    case "sampling-tse-ibge":
+      return <TseIbgeCapturesFeature />;
 
     case "questionnaires":
     case "questionnaires-routing":

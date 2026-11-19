@@ -47,6 +47,12 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
         label: "Matriz de Cotas",
         icon: "dot",
       },
+      {
+        id: "sampling-tse-ibge",
+        path: "/amostragem/registros-tse-ibge",
+        label: "Registros TSE / IBGE",
+        icon: "dot",
+      },
     ],
   },
   {

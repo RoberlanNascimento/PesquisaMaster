@@ -40,8 +40,8 @@ export function SamplingDimensionsFeature(): React.JSX.Element {
           );
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => { });
+  }, [])
 
   const filtered = useMemo(() => {
     return dimensions.filter((d) => {

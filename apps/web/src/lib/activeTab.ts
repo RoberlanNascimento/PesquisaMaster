@@ -20,6 +20,7 @@ export type ActiveTab =
   | "sampling-group"
   | "sampling-dimensions"
   | "sampling-quotas"
+  | "sampling-tse-ibge"
   | "fieldwork-group"
   | "field-metas"
   | "field-transfer"

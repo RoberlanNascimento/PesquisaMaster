@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
+import { AddCotaDialogModal, type ManualCotaPayload } from "./AddCotaDialogModal";
+import { AmostraDialogModal, type AmostraFormPayload } from "./AmostraDialogModal";
+import { EleitoradoTseDialogModal, type EleitoradoTseFormPayload } from "./EleitoradoTseDialogModal";
 
 const { colors } = NOCTURNE_TOKENS;
 const API_BASE = "http://127.0.0.1:8000/api/v1/amostragem";
@@ -17,27 +20,17 @@ export function SamplingQuotasFeature(): React.JSX.Element {
   const [municipios, setMunicipios] = useState<any[]>([]);
   const [amostras, setAmostras] = useState<any[]>([]);
   const [bairros, setBairros] = useState<any[]>([]);
+  const [eleitoradosTse, setEleitoradosTse] = useState<any[]>([]);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [filterMunicipioId, setFilterMunicipioId] = useState<string>("");
   const [selectedAmostraId, setSelectedAmostraId] = useState<number | null>(null);
   const [cotas, setCotas] = useState<any[]>([]);
-
-  const [idMunicipio, setIdMunicipio] = useState("");
-  const [descricao, setDescricao] = useState("Amostra Municipal TSE 2026");
-  const [nivelConfianca, setNivelConfianca] = useState("95");
-  const [margemErro, setMargemErro] = useState("4.9");
-  const [populacao, setPopulacao] = useState("100000");
-  const [tamanhoManual, setTamanhoManual] = useState("");
-  const [idEleitoradoTse, setIdEleitoradoTse] = useState<number | null>(null);
-  const [syncStatus, setSyncStatus] = useState<string>("");
-  const [previewSample, setPreviewSample] = useState<{ n: number; z: number; cotas: { dim: string; cat: string; pct: number; qtd: number }[] } | null>(null);
-  const [lastSavedAmostraId, setLastSavedAmostraId] = useState<number | null>(null);
   const [selectedCotaId, setSelectedCotaId] = useState<number | null>(null);
-  const [editingAmostraId, setEditingAmostraId] = useState<number | null>(null);
 
-  const [novaDimensao, setNovaDimensao] = useState("Bairro / Zona");
-  const [novaCategoria, setNovaCategoria] = useState("");
-  const [novoBairroId, setNovoBairroId] = useState("");
-  const [novoPct, setNovoPct] = useState("10");
-  const [novaQtd, setNovaQtd] = useState("40");
+  const [amostraModalOpen, setAmostraModalOpen] = useState(false);
+  const [editingAmostra, setEditingAmostra] = useState<any | null>(null);
+  const [eleitoradoModalOpen, setEleitoradoModalOpen] = useState(false);
+  const [addCotaModalOpen, setAddCotaModalOpen] = useState(false);
 
   const loadOpcoes = async (): Promise<void> => {
     const res = await fetch(`${API_BASE}/opcoes`, { cache: "no-store" });
@@ -46,15 +39,18 @@ export function SamplingQuotasFeature(): React.JSX.Element {
     const muns = Array.isArray(data?.municipios) ? data.municipios : [];
     const ams = Array.isArray(data?.amostras) ? data.amostras : [];
     const brs = Array.isArray(data?.bairros) ? data.bairros : [];
+    const tse = Array.isArray(data?.eleitorados_tse) ? data.eleitorados_tse : [];
+    const usrs = Array.isArray(data?.usuarios) ? data.usuarios : [];
     setMunicipios(muns);
     setAmostras(ams);
     setBairros(brs);
-    if (muns.length > 0 && !idMunicipio) {
-      setIdMunicipio(String(muns[0].id_municipio));
-      if (muns[0].eleitorado_total > 0) setPopulacao(String(muns[0].eleitorado_total));
-    }
-    if (ams.length > 0 && selectedAmostraId === null) {
+    setEleitoradosTse(tse);
+    setUsuarios(usrs);
+    if (ams.length > 0 && (selectedAmostraId === null || !ams.some((a: any) => a.id_amostra === selectedAmostraId))) {
       setSelectedAmostraId(ams[0].id_amostra);
+    } else if (ams.length === 0) {
+      setSelectedAmostraId(null);
+      setCotas([]);
     }
   };
 
@@ -73,123 +69,71 @@ export function SamplingQuotasFeature(): React.JSX.Element {
     if (selectedAmostraId !== null) void loadDetalhes(selectedAmostraId);
   }, [selectedAmostraId]);
 
-  const conferirMunicipioTseIbge = async (munId: string): Promise<void> => {
-    if (!munId) return;
-    setSyncStatus("Sincronizando TSE/IBGE...");
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/integracoes/conferir-municipio/${munId}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        const d = await res.json();
-        setPopulacao(String(d.eleitorado_tse_oficial));
-        setIdEleitoradoTse(d.id_eleitorado_tse_gravado);
-        setSyncStatus(
-          `TSE: ${d.eleitorado_tse_oficial.toLocaleString("pt-BR")} eleitores | IBGE: ${d.populacao_ibge_oficial.toLocaleString("pt-BR")} hab. (${d.status_conferencia})`
-        );
-      } else {
-        setSyncStatus("Conferência TSE/IBGE indisponível no momento.");
-      }
-    } catch {
-      setSyncStatus("Erro ao conectar com TSE/IBGE.");
-    }
-  };
-
-  const handleCalculatePreview = (): void => {
-    const conf = Number(nivelConfianca) || 95;
-    const z = conf >= 99 ? 2.576 : conf >= 95 ? 1.96 : 1.645;
-    const e = Math.max((Number(margemErro) || 4.9) / 100, 0.005);
-    const nPop = Number(populacao) || 0;
-    const n0 = (z * z * 0.25) / (e * e);
-    const calcN = nPop > 0 ? Math.ceil((n0 * nPop) / (n0 + nPop - 1)) : Math.ceil(n0);
-    const finalN = tamanhoManual && Number(tamanhoManual) > 0 ? Number(tamanhoManual) : Math.max(calcN, 1);
-
-    const hare = (total: number, items: [string, number][]): number[] => {
-      const s = items.reduce((a, b) => a + b[1], 0);
-      const exact = items.map((x) => (x[1] / s) * total);
-      const floors = exact.map((x) => Math.floor(x));
-      let rem = total - floors.reduce((a, b) => a + b, 0);
-      const order = exact.map((x, i) => ({ i, frac: x - (floors[i] ?? 0) })).sort((a, b) => b.frac - a.frac);
-      for (let k = 0; k < rem; k++) {
-        const idx = order[k]?.i;
-        if (idx !== undefined) floors[idx] = (floors[idx] ?? 0) + 1;
-      }
-      return floors;
-    };
-
-    const sexoCats: [string, number][] = [["Feminino", 52.8], ["Masculino", 47.2]];
-    const faixaCats: [string, number][] = [
-      ["16 a 24 anos", 14.5], ["25 a 34 anos", 21.2], ["35 a 44 anos", 21.0],
-      ["45 a 59 anos", 24.8], ["60 anos ou mais", 18.5],
-    ];
-    const sexoQtds = hare(finalN, sexoCats);
-    const faixaQtds = hare(finalN, faixaCats);
-
-    const cotasPreview = [
-      ...sexoCats.map(([cat, pct], i) => ({ dim: "Sexo", cat, pct, qtd: sexoQtds[i] ?? 0 })),
-      ...faixaCats.map(([cat, pct], i) => ({ dim: "Faixa Etária", cat, pct, qtd: faixaQtds[i] ?? 0 })),
-    ];
-    setPreviewSample({ n: finalN, z, cotas: cotasPreview });
-  };
-
-  const handleCreateAmostra = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    if (!idMunicipio) return;
-    const url = editingAmostraId ? `${API_BASE}/amostras/${editingAmostraId}` : `${API_BASE}/amostras`;
-    const method = editingAmostraId ? "PUT" : "POST";
+  const handleSaveAmostra = async (payload: AmostraFormPayload, editingId: number | null): Promise<void> => {
+    const url = editingId ? `${API_BASE}/amostras/${editingId}` : `${API_BASE}/amostras`;
+    const method = editingId ? "PUT" : "POST";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id_municipio: Number(idMunicipio),
-        descricao,
-        nivel_confianca: Number(nivelConfianca),
-        margem_erro: Number(margemErro),
-        populacao_universo: Number(populacao),
-        tamanho_amostral: previewSample ? previewSample.n : (tamanhoManual ? Number(tamanhoManual) : null),
-        gerar_cotas_automaticas: !editingAmostraId,
-        id_eleitorado_tse: idEleitoradoTse,
-      }),
+      body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      const created = await res.json();
-      setPreviewSample(null);
-      setEditingAmostraId(null);
-      await loadOpcoes();
-      if (created?.id_amostra) {
-        setSelectedAmostraId(created.id_amostra);
-        if (!editingAmostraId) setLastSavedAmostraId(created.id_amostra);
-      }
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.detail || "Erro ao salvar amostra no banco de dados.");
+    }
+    const saved = await res.json();
+    await loadOpcoes();
+    if (saved?.id_amostra) {
+      setSelectedAmostraId(saved.id_amostra);
+      await loadDetalhes(saved.id_amostra);
     }
   };
 
-  const handleRevertLastSave = async (): Promise<void> => {
-    if (!lastSavedAmostraId) return;
-    const res = await fetch(`${API_BASE}/amostras/${lastSavedAmostraId}`, { method: "DELETE" });
-    if (res.ok) {
-      setLastSavedAmostraId(null);
+  const handleDeleteAmostra = async (idAmostra: number): Promise<void> => {
+    const res = await fetch(`${API_BASE}/amostras/${idAmostra}`, { method: "DELETE" });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.detail || "Não foi possível excluir a amostra.");
+    }
+    if (selectedAmostraId === idAmostra) {
       setSelectedAmostraId(null);
       setCotas([]);
-      await loadOpcoes();
     }
+    await loadOpcoes();
   };
 
-  const handleAddCota = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
+  const handleSaveEleitoradoTse = async (payload: EleitoradoTseFormPayload, editingId: number | null): Promise<void> => {
+    const url = editingId ? `${API_BASE}/eleitorado-tse/${editingId}` : `${API_BASE}/eleitorado-tse`;
+    const method = editingId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.detail || "Erro ao salvar registro de eleitorado TSE.");
+    }
+    await loadOpcoes();
+  };
+
+  const handleDeleteEleitoradoTse = async (idEleitoradoTse: number): Promise<void> => {
+    const res = await fetch(`${API_BASE}/eleitorado-tse/${idEleitoradoTse}`, { method: "DELETE" });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.detail || "Não foi possível excluir o registro de eleitorado TSE.");
+    }
+    await loadOpcoes();
+  };
+
+  const handleSaveManualCota = async (payload: ManualCotaPayload): Promise<void> => {
     if (!selectedAmostraId) return;
     const res = await fetch(`${API_BASE}/amostras/${selectedAmostraId}/cotas`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nome_dimensao: novaDimensao,
-        categoria: novaCategoria || "Setor",
-        id_bairro: novoBairroId ? Number(novoBairroId) : null,
-        percentual_meta: Number(novoPct),
-        quantidade_meta: Number(novaQtd),
-      }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
-      setNovaCategoria("");
       await loadDetalhes(selectedAmostraId);
     }
   };
@@ -209,153 +153,90 @@ export function SamplingQuotasFeature(): React.JSX.Element {
   };
 
   const selectedAmostra = amostras.find((a) => a.id_amostra === selectedAmostraId);
-  const amostrasDoMunicipio = amostras.filter((a) => String(a.id_municipio) === idMunicipio);
+  const amostrasVisiveis = filterMunicipioId
+    ? amostras.filter((a) => String(a.id_municipio) === filterMunicipioId)
+    : amostras;
   const filteredBairros = selectedAmostra
     ? bairros.filter((b) => b.id_municipio === selectedAmostra.id_municipio)
     : bairros;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", color: colors.textPrimary }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>Planejamento Amostral & Cotas Hare-Niemeyer (TSE)</h2>
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: colors.onSurfaceVariant }}>
-          Defina a amostragem por município (automática via parâmetros TSE ou manual) e ajuste cotas por dimensão e bairro/zona.
-        </p>
-      </div>
-
-      <form onSubmit={handleCreateAmostra} style={{ backgroundColor: colors.surfaceContainerLow, border: `1px solid ${colors.borderSubtle}`, borderRadius: "14px", padding: "16px", display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "flex-end" }}>
-        <div style={{ width: "100%", fontSize: "12.5px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>
-          Adicione a população do município para calcularmos a amostra adequada.
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Município</div>
-          <select style={INPUT_STYLE} value={idMunicipio} onChange={(e) => {
-            const val = e.target.value;
-            setIdMunicipio(val);
-            const m = municipios.find((x) => String(x.id_municipio) === val);
-            if (m?.eleitorado_total > 0) setPopulacao(String(m.eleitorado_total));
-          }}>
-            {municipios.map((m) => (
-              <option key={m.id_municipio} value={m.id_municipio}>{m.nome} / {m.uf}</option>
-            ))}
-          </select>
+          <h2 style={{ margin: 0, fontSize: "20px" }}>Planejamento Amostral & Cotas Hare-Niemeyer (TSE)</h2>
+          <p style={{ margin: "4px 0 0", fontSize: "13px", color: colors.onSurfaceVariant }}>
+            Defina a amostragem por município (automática via parâmetros TSE ou manual) e ajuste cotas por dimensão e bairro/zona.
+          </p>
         </div>
-        <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Descrição da Amostra</div>
-          <input style={{ ...INPUT_STYLE, width: "220px" }} value={descricao} onChange={(e) => setDescricao(e.target.value)} required />
-        </div>
-        <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Confiança (%)</div>
-          <input style={{ ...INPUT_STYLE, width: "80px" }} type="number" step="0.1" value={nivelConfianca} onChange={(e) => setNivelConfianca(e.target.value)} />
-        </div>
-        <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Margem Erro (%)</div>
-          <input style={{ ...INPUT_STYLE, width: "80px" }} type="number" step="0.1" value={margemErro} onChange={(e) => setMargemErro(e.target.value)} />
-        </div>
-        <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>Universo (Eleitores)</div>
-          <input style={{ ...INPUT_STYLE, width: "110px" }} type="number" value={populacao} onChange={(e) => setPopulacao(e.target.value)} />
-        </div>
-        <div>
-          <div style={{ fontSize: "11px", color: colors.onSurfaceVariant, marginBottom: "4px" }}>N Manual (opcional)</div>
-          <input style={{ ...INPUT_STYLE, width: "100px" }} type="number" placeholder="Auto" value={tamanhoManual} onChange={(e) => setTamanhoManual(e.target.value)} />
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingAmostraId(null);
-            setPreviewSample(null);
-            setDescricao("Amostra Municipal TSE 2026");
-            setNivelConfianca("95");
-            setMargemErro("4.9");
-            setTamanhoManual("");
-          }}
-          style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${colors.borderSubtle}`, backgroundColor: colors.surfaceContainer, color: colors.textPrimary, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
-        >
-          + Nova Amostragem
-        </button>
-        <button
-          type="button"
-          onClick={handleCalculatePreview}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#fbbc04", color: "#3f2e00", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
-        >
-          Calcular
-        </button>
-        <button type="submit" style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#8ab4f8", color: "#003061", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>
-          {editingAmostraId ? "Atualizar Amostra" : "Salvar no Banco"}
-        </button>
-        {editingAmostraId && (
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => setEditingAmostraId(null)}
-            style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${colors.borderSubtle}`, backgroundColor: colors.surfaceContainer, color: colors.textPrimary, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+            onClick={() => setEleitoradoModalOpen(true)}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "8px",
+              border: `1px solid ${colors.borderSubtle}`,
+              backgroundColor: colors.surfaceContainer,
+              color: "#81c995",
+              fontWeight: 700,
+              fontSize: "12.5px",
+              cursor: "pointer",
+            }}
           >
-            Cancelar Edição
+            + Eleitorado TSE
           </button>
-        )}
-        <button
-          type="button"
-          disabled={!lastSavedAmostraId}
-          onClick={() => void handleRevertLastSave()}
-          style={{ padding: "8px 14px", borderRadius: "8px", border: "none", backgroundColor: lastSavedAmostraId ? "#f28b82" : "#353535", color: lastSavedAmostraId ? "#690005" : "#888", fontWeight: 600, fontSize: "12px", cursor: lastSavedAmostraId ? "pointer" : "not-allowed" }}
-        >
-          Reverter Último Salvamento
-        </button>
-        <button
-          type="button"
-          onClick={() => void conferirMunicipioTseIbge(idMunicipio)}
-          style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${colors.borderSubtle}`, backgroundColor: colors.surfaceContainer, color: "#81c995", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
-        >
-          Sincronizar TSE/IBGE
-        </button>
-        {syncStatus && (
-          <div style={{ width: "100%", fontSize: "11px", color: "#81c995", marginTop: "4px" }}>
-            {syncStatus}
-          </div>
-        )}
-      </form>
-
-      {previewSample && (
-        <div style={{ backgroundColor: "#1e293b", border: "1px solid #8ab4f8", borderRadius: "14px", padding: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <strong style={{ fontSize: "14px", color: "#8ab4f8" }}>
-              Prévia Calculada (Não Salva no Banco) — N = {previewSample.n} entrevistas (Z = {previewSample.z})
-            </strong>
-            <span style={{ fontSize: "11px", color: colors.onSurfaceVariant }}>Clique em "Salvar no Banco" para persistir</span>
-          </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${colors.borderSubtle}`, textAlign: "left", color: colors.onSurfaceVariant }}>
-                <th style={{ padding: "6px" }}>Dimensão</th>
-                <th style={{ padding: "6px" }}>Estrato / Categoria</th>
-                <th style={{ padding: "6px" }}>% Meta</th>
-                <th style={{ padding: "6px" }}>Qtd Calculada (Hare-Niemeyer)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {previewSample.cotas.map((c, idx) => (
-                <tr key={idx} style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}>
-                  <td style={{ padding: "6px" }}>{c.dim}</td>
-                  <td style={{ padding: "6px", fontWeight: 600 }}>{c.cat}</td>
-                  <td style={{ padding: "6px" }}>{c.pct.toFixed(1)}%</td>
-                  <td style={{ padding: "6px", color: "#fbbc04", fontWeight: 600 }}>{c.qtd}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingAmostra(null);
+              setAmostraModalOpen(true);
+            }}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "#8ab4f8",
+              color: "#003061",
+              fontWeight: 700,
+              fontSize: "12.5px",
+              cursor: "pointer",
+            }}
+          >
+            + Adicionar Amostra
+          </button>
         </div>
-      )}
+      </div>
 
       <div style={{ backgroundColor: colors.surfaceContainerLow, border: `1px solid ${colors.borderSubtle}`, borderRadius: "14px", padding: "16px" }}>
-        <h3 style={{ margin: "0 0 10px", fontSize: "14px" }}>
-          Amostragens Salvas para o Município ({amostrasDoMunicipio.length})
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+          <h3 style={{ margin: 0, fontSize: "14px" }}>
+            Amostragens Salvas ({amostrasVisiveis.length})
+          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>Filtrar Município:</span>
+            <select
+              style={INPUT_STYLE}
+              value={filterMunicipioId}
+              onChange={(e) => setFilterMunicipioId(e.target.value)}
+            >
+              <option value="">Todos os Municípios</option>
+              {municipios.map((m) => (
+                <option key={m.id_municipio} value={m.id_municipio}>
+                  {m.nome} / {m.uf}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${colors.borderSubtle}`, textAlign: "left", color: colors.onSurfaceVariant }}>
                 <th style={{ padding: "6px" }}>ID</th>
+                <th style={{ padding: "6px" }}>Município</th>
                 <th style={{ padding: "6px" }}>Descrição</th>
+                <th style={{ padding: "6px" }}>Data</th>
                 <th style={{ padding: "6px" }}>N Amostral</th>
                 <th style={{ padding: "6px" }}>Confiança / Margem</th>
                 <th style={{ padding: "6px" }}>Universo</th>
@@ -363,7 +244,7 @@ export function SamplingQuotasFeature(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {amostrasDoMunicipio.map((a) => (
+              {amostrasVisiveis.map((a) => (
                 <tr
                   key={a.id_amostra}
                   onClick={() => setSelectedAmostraId(a.id_amostra)}
@@ -374,7 +255,11 @@ export function SamplingQuotasFeature(): React.JSX.Element {
                   }}
                 >
                   <td style={{ padding: "6px" }}>#{a.id_amostra}</td>
+                  <td style={{ padding: "6px" }}>{a.municipio_nome ? `${a.municipio_nome} / ${a.uf || ""}` : "—"}</td>
                   <td style={{ padding: "6px", fontWeight: 600 }}>{a.descricao}</td>
+                  <td style={{ padding: "6px", color: colors.onSurfaceVariant, fontSize: "11.5px" }}>
+                    {a.calculado_em ? new Date(a.calculado_em).toLocaleDateString("pt-BR") : "—"}
+                  </td>
                   <td style={{ padding: "6px", color: "#8ab4f8", fontWeight: 600 }}>{a.tamanho_amostral}</td>
                   <td style={{ padding: "6px" }}>{a.nivel_confianca}% / {a.margem_erro}%</td>
                   <td style={{ padding: "6px" }}>{Number(a.populacao_universo).toLocaleString("pt-BR")}</td>
@@ -383,13 +268,8 @@ export function SamplingQuotasFeature(): React.JSX.Element {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingAmostraId(a.id_amostra);
-                        setIdMunicipio(String(a.id_municipio));
-                        setDescricao(a.descricao);
-                        setNivelConfianca(String(a.nivel_confianca));
-                        setMargemErro(String(a.margem_erro));
-                        setPopulacao(String(a.populacao_universo));
-                        setTamanhoManual(String(a.tamanho_amostral));
+                        setEditingAmostra(a);
+                        setAmostraModalOpen(true);
                       }}
                       style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #353535", backgroundColor: "#2a2a2a", color: "#fbbc04", fontSize: "11px", cursor: "pointer" }}
                     >
@@ -405,10 +285,10 @@ export function SamplingQuotasFeature(): React.JSX.Element {
                   </td>
                 </tr>
               ))}
-              {amostrasDoMunicipio.length === 0 && (
+              {amostrasVisiveis.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: "10px 6px", color: colors.onSurfaceVariant }}>
-                    Nenhuma amostragem salva para este município.
+                  <td colSpan={8} style={{ padding: "10px 6px", color: colors.onSurfaceVariant }}>
+                    Nenhuma amostragem salva encontrada.
                   </td>
                 </tr>
               )}
@@ -429,28 +309,31 @@ export function SamplingQuotasFeature(): React.JSX.Element {
               ))}
             </select>
           </div>
-          {selectedAmostra && (
-            <span style={{ fontSize: "12px", color: "#81c995" }}>
-              Meta Total: <strong>{selectedAmostra.tamanho_amostral}</strong> entrevistas • Margem: {selectedAmostra.margem_erro}%
-            </span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {selectedAmostra && (
+              <span style={{ fontSize: "12px", color: "#81c995" }}>
+                Meta Total: <strong>{selectedAmostra.tamanho_amostral}</strong> entrevistas • Margem: {selectedAmostra.margem_erro}%
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={!selectedAmostraId}
+              onClick={() => setAddCotaModalOpen(true)}
+              style={{
+                padding: "7px 14px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "#81c995",
+                color: "#00391b",
+                fontWeight: 600,
+                fontSize: "12px",
+                cursor: selectedAmostraId ? "pointer" : "not-allowed",
+              }}
+            >
+              + Adicionar Cota Manualmente
+            </button>
+          </div>
         </div>
-
-        <form onSubmit={handleAddCota} style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-          <input style={INPUT_STYLE} placeholder="Dimensão (ex: Bairro)" value={novaDimensao} onChange={(e) => setNovaDimensao(e.target.value)} required />
-          <input style={INPUT_STYLE} placeholder="Categoria / Estrato" value={novaCategoria} onChange={(e) => setNovaCategoria(e.target.value)} required />
-          <select style={INPUT_STYLE} value={novoBairroId} onChange={(e) => setNovoBairroId(e.target.value)}>
-            <option value="">Sem bairro específico</option>
-            {filteredBairros.map((b) => (
-              <option key={b.id_bairro} value={b.id_bairro}>{b.nome_bairro}</option>
-            ))}
-          </select>
-          <input style={{ ...INPUT_STYLE, width: "75px" }} type="number" step="0.1" placeholder="% Meta" value={novoPct} onChange={(e) => setNovoPct(e.target.value)} required />
-          <input style={{ ...INPUT_STYLE, width: "75px" }} type="number" placeholder="Qtd Meta" value={novaQtd} onChange={(e) => setNovaQtd(e.target.value)} required />
-          <button type="submit" style={{ padding: "7px 14px", borderRadius: "8px", border: "none", backgroundColor: "#81c995", color: "#00391b", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>
-            + Adicionar Cota
-          </button>
-        </form>
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -516,6 +399,47 @@ export function SamplingQuotasFeature(): React.JSX.Element {
           </table>
         </div>
       </div>
+
+      <AmostraDialogModal
+        isOpen={amostraModalOpen}
+        onClose={() => {
+          setAmostraModalOpen(false);
+          setEditingAmostra(null);
+        }}
+        onSave={handleSaveAmostra}
+        onDelete={handleDeleteAmostra}
+        onRefreshOpcoes={loadOpcoes}
+        municipios={municipios}
+        eleitoradosTse={eleitoradosTse}
+        initialAmostra={editingAmostra}
+        defaultMunicipioId={filterMunicipioId}
+      />
+
+      <EleitoradoTseDialogModal
+        isOpen={eleitoradoModalOpen}
+        onClose={() => setEleitoradoModalOpen(false)}
+        onSave={handleSaveEleitoradoTse}
+        onDelete={handleDeleteEleitoradoTse}
+        onRefreshOpcoes={loadOpcoes}
+        municipios={municipios}
+        bairros={bairros}
+        usuarios={usuarios}
+        eleitoradosTse={eleitoradosTse}
+        defaultMunicipioId={filterMunicipioId}
+      />
+
+      <AddCotaDialogModal
+        isOpen={addCotaModalOpen}
+        onClose={() => setAddCotaModalOpen(false)}
+        onSave={handleSaveManualCota}
+        bairros={filteredBairros}
+        sampleSize={Number(selectedAmostra?.tamanho_amostral) || 400}
+        amostraLabel={
+          selectedAmostra
+            ? `Amostra #${selectedAmostra.id_amostra} — ${selectedAmostra.municipio_nome || "Município"}: ${selectedAmostra.descricao} (N=${selectedAmostra.tamanho_amostral})`
+            : ""
+        }
+      />
     </div>
   );
 }

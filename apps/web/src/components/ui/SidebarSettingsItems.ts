@@ -42,6 +42,13 @@ export const GEO_DROPDOWN_ITEMS: readonly NavItemConfig[] = [
     subtitle: "Eleitorado_TSE",
     icon: "🏛️",
   },
+  {
+    id: "sampling-tse-ibge",
+    path: "/amostragem/registros-tse-ibge",
+    label: "Registros TSE / IBGE",
+    subtitle: "Gravações Oficiais",
+    icon: "🗂️",
+  },
 ];
 
 export const ACCESS_DROPDOWN_ITEMS: readonly NavItemConfig[] = [
