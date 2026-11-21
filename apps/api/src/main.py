@@ -20,6 +20,7 @@ from src.modules.fieldwork.router import router as fieldwork_router
 from src.modules.pesquisas.bairros_router import bairros_router
 from src.modules.pesquisas.amostragem_router import amostragem_router
 from src.modules.pesquisas.integracoes_router import integracao_router
+from src.modules.pesquisas.tabulacao_ponderada_router import tabulacao_ponderada_router
 from src.modules.pesquisas.campo_operacoes_router import campo_operacoes_router
 from src.modules.pesquisas.estados_router import estados_router
 from src.modules.pesquisas.regioes_router import regioes_router
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(campo_operacoes_router)
     app.include_router(amostragem_router)
     app.include_router(integracao_router)
+    app.include_router(tabulacao_ponderada_router)
 
     @app.get(
         "/health",

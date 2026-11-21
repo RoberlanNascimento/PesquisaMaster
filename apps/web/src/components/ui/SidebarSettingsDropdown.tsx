@@ -7,6 +7,7 @@ import {
   CATALOG_DROPDOWN_ITEMS,
   AUDIT_DROPDOWN_ITEMS,
 } from "./SidebarSettingsItems";
+import { ThemeModeSwitcher } from "./ThemeModeSwitcher";
 
 export interface SidebarSettingsDropdownProps {
   readonly isOpen: boolean;
@@ -258,6 +259,29 @@ export function SidebarSettingsDropdown({
         {renderSection("Empresa", ACCESS_DROPDOWN_ITEMS, "sidebar-company-group-label")}
         {renderSection("Catálogo", CATALOG_DROPDOWN_ITEMS)}
         {renderSection("Auditoria", AUDIT_DROPDOWN_ITEMS, "sidebar-audit-group-label")}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          paddingTop: "10px",
+          borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "0.05em",
+            textTransform: "uppercase",
+            color: "#94a3b8",
+          }}
+        >
+          Tema
+        </span>
+        <ThemeModeSwitcher showResolvedBadge={false} testIdPrefix="sidebar-settings-theme" />
       </div>
 
       <button

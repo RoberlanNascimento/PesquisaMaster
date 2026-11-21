@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { SlideOverDrawer } from "../../components/ui/SlideOverDrawer";
+import { SearchableCombobox } from "../../components/ui/SearchableCombobox";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 import { useUiSessionStore } from "../../lib/store";
 import { useTerritorialStore } from "../regions/regionsStore";
@@ -10,6 +11,7 @@ import {
   type SurveyFormData,
   type SurveyRecord,
 } from "./surveysData";
+import type { BackendAmostraOut } from "./pesquisasApi";
 
 const { colors } = NOCTURNE_TOKENS;
 
@@ -51,14 +53,17 @@ export function SurveyDrawerForm({
   const states = useTerritorialStore((s) => s.states);
   const municipalities = useTerritorialStore((s) => s.municipalities);
   const collaborators = useUiSessionStore((s) => s.clientCollaborators);
-  const [dbAmostras, setDbAmostras] = useState<any[]>([]);
+  const [dbAmostras, setDbAmostras] = useState<readonly BackendAmostraOut[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
     fetch("http://127.0.0.1:8000/api/v1/amostragem/opcoes", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : ({} as any)))
+      .then(
+        (r): Promise<{ amostras?: BackendAmostraOut[] }> =>
+          r.ok ? (r.json() as Promise<{ amostras?: BackendAmostraOut[] }>) : Promise.resolve({}),
+      )
       .then((d) => {
-        if (Array.isArray(d?.amostras)) setDbAmostras(d.amostras);
+        if (Array.isArray(d.amostras)) setDbAmostras(d.amostras);
       })
       .catch(() => {});
   }, [isOpen]);
@@ -167,15 +172,31 @@ export function SurveyDrawerForm({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
               <label style={LABEL_STYLE}>Estado (FK Estados) *</label>
-              <select data-testid="select-survey-state" value={watchedStateId} onChange={(e) => handleStateChange(e.target.value)} style={INPUT_STYLE}>
-                {states.map((st) => <option key={st.id} value={st.id}>{st.uf} — {st.name} (IBGE {st.ibgeCode})</option>)}
-              </select>
+              <SearchableCombobox
+                value={watchedStateId}
+                required
+                placeholder="Digite o estado..."
+                options={states.map((st) => ({
+                  value: st.id,
+                  label: `${st.uf} — ${st.name}`,
+                  sublabel: `IBGE ${st.ibgeCode}`,
+                }))}
+                onChange={handleStateChange}
+              />
             </div>
             <div>
               <label style={LABEL_STYLE}>Município (FK Municípios) *</label>
-              <select data-testid="select-survey-municipality" value={watch("municipalityId")} onChange={(e) => handleMunicipalityChange(e.target.value)} style={INPUT_STYLE}>
-                {filteredMunicipalities.map((mun) => <option key={mun.id} value={mun.id}>{mun.name} / {mun.uf} ({mun.ibgeCode})</option>)}
-              </select>
+              <SearchableCombobox
+                value={watch("municipalityId")}
+                required
+                placeholder="Digite o município..."
+                options={filteredMunicipalities.map((mun) => ({
+                  value: mun.id,
+                  label: `${mun.name} / ${mun.uf}`,
+                  sublabel: mun.ibgeCode,
+                }))}
+                onChange={handleMunicipalityChange}
+              />
             </div>
           </div>
         </div>
@@ -184,9 +205,17 @@ export function SurveyDrawerForm({
           <h4 style={SECTION_TITLE_STYLE}>3. Responsabilidade Técnica</h4>
           <div>
             <label style={LABEL_STYLE}>Colaborador Responsável (FK Colaboradores) *</label>
-            <select data-testid="select-survey-collaborator" value={watch("collaboratorId")} onChange={(e) => handleCollaboratorChange(e.target.value)} style={INPUT_STYLE}>
-              {collaborators.map((c) => <option key={c.id} value={c.id}>{c.fullName} ({c.role} • {c.credentialOrDevice})</option>)}
-            </select>
+            <SearchableCombobox
+              value={watch("collaboratorId")}
+              required
+              placeholder="Digite o colaborador..."
+              options={collaborators.map((c) => ({
+                value: c.id,
+                label: c.fullName,
+                sublabel: `${c.role} • ${c.credentialOrDevice}`,
+              }))}
+              onChange={handleCollaboratorChange}
+            />
           </div>
         </div>
 
@@ -195,14 +224,24 @@ export function SurveyDrawerForm({
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
             <div>
               <label style={LABEL_STYLE}>Plano Amostral (FK Tamanho da Amostra) *</label>
-              <select data-testid="select-survey-sample-plan" value={watch("samplePlanId")} onChange={(e) => handleSamplePlanChange(e.target.value)} style={INPUT_STYLE}>
-                {dbAmostras.map((a) => (
-                  <option key={a.id_amostra} value={String(a.id_amostra)}>
-                    #{a.id_amostra} — {a.municipio_nome || "Município"}/{a.uf || ""}: {a.descricao} (N={a.tamanho_amostral})
-                  </option>
-                ))}
-                {dbAmostras.length === 0 && SAMPLE_PLAN_PRESETS.map((plan) => <option key={plan.id} value={plan.id}>{plan.label}</option>)}
-              </select>
+              <SearchableCombobox
+                value={watch("samplePlanId")}
+                required
+                placeholder="Digite o plano amostral..."
+                options={
+                  dbAmostras.length > 0
+                    ? dbAmostras.map((a) => ({
+                        value: String(a.id_amostra),
+                        label: `#${a.id_amostra} — ${a.municipio_nome || "Município"}/${a.uf || ""}: ${a.descricao}`,
+                        sublabel: `N=${a.tamanho_amostral}`,
+                      }))
+                    : SAMPLE_PLAN_PRESETS.map((plan) => ({
+                        value: plan.id,
+                        label: plan.label,
+                      }))
+                }
+                onChange={handleSamplePlanChange}
+              />
             </div>
             <div>
               <label style={LABEL_STYLE}>Tamanho da Amostra (N) *</label>

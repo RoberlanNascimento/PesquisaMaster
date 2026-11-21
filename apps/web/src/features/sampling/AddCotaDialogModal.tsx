@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
+import { SearchableCombobox } from "../../components/ui/SearchableCombobox";
 
 const { colors } = NOCTURNE_TOKENS;
 
@@ -167,19 +168,17 @@ export function AddCotaDialogModal({
 
           <div>
             <label style={FIELD_LABEL}>Bairro (Município da Amostra) *</label>
-            <select
-              style={FIELD_INPUT}
+            <SearchableCombobox
               value={bairroId}
-              onChange={(e) => setBairroId(e.target.value)}
               required={bairros.length > 0}
-            >
-              {bairros.map((b) => (
-                <option key={b.id_bairro} value={b.id_bairro}>
-                  {b.nome_bairro}
-                </option>
-              ))}
-              {bairros.length === 0 && <option value="">Bairro padrão do município</option>}
-            </select>
+              emptyOptionLabel={bairros.length === 0 ? "Bairro padrão do município" : undefined}
+              placeholder="Digite o bairro..."
+              options={bairros.map((b) => ({
+                value: String(b.id_bairro),
+                label: b.nome_bairro,
+              }))}
+              onChange={setBairroId}
+            />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

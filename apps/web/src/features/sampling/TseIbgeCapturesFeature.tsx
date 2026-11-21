@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
+import { SearchableCombobox } from "../../components/ui/SearchableCombobox";
 import { EleitoradoTseDialogModal, type EleitoradoTseFormPayload } from "./EleitoradoTseDialogModal";
 
 const { colors } = NOCTURNE_TOKENS;
@@ -34,7 +35,6 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
 
   const [filterMunicipioId, setFilterMunicipioId] = useState<string>("");
   const [filterTipoCaptura, setFilterTipoCaptura] = useState<string>("");
-  const [loading, setLoading] = useState(false);
 
   const [eleitoradoModalOpen, setEleitoradoModalOpen] = useState(false);
   const [editingEleitoradoRecord, setEditingEleitoradoRecord] = useState<any | null>(null);
@@ -50,19 +50,14 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
   }, []);
 
   const loadHistorico = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filterMunicipioId) params.set("id_municipio", filterMunicipioId);
-      if (filterTipoCaptura) params.set("tipo_captura", filterTipoCaptura);
-      const qs = params.toString() ? `?${params.toString()}` : "";
-      const res = await fetch(`${API_INTEGRACOES}/historico-tse-ibge${qs}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      setRegistros(Array.isArray(data?.registros) ? data.registros : []);
-    } finally {
-      setLoading(false);
-    }
+    const params = new URLSearchParams();
+    if (filterMunicipioId) params.set("id_municipio", filterMunicipioId);
+    if (filterTipoCaptura) params.set("tipo_captura", filterTipoCaptura);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_INTEGRACOES}/historico-tse-ibge${qs}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    setRegistros(Array.isArray(data?.registros) ? data.registros : []);
   }, [filterMunicipioId, filterTipoCaptura]);
 
   const refreshAll = useCallback(async (): Promise<void> => {
@@ -147,22 +142,6 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => void refreshAll()}
-            style={{
-              padding: "9px 14px",
-              borderRadius: "8px",
-              border: `1px solid ${colors.borderSubtle}`,
-              backgroundColor: colors.surfaceContainer,
-              color: colors.textPrimary,
-              fontWeight: 600,
-              fontSize: "12.5px",
-              cursor: "pointer",
-            }}
-          >
-            {loading ? "Atualizando..." : "Atualizar"}
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setEditingEleitoradoRecord(null);
               setEleitoradoModalOpen(true);
@@ -178,7 +157,7 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
               cursor: "pointer",
             }}
           >
-            + Eleitorado TSE
+            Novo Registro TSE/IBGE
           </button>
         </div>
       </div>
@@ -214,18 +193,19 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <span style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>Município:</span>
-              <select
-                style={INPUT_STYLE}
-                value={filterMunicipioId}
-                onChange={(e) => setFilterMunicipioId(e.target.value)}
-              >
-                <option value="">Todos os Municípios</option>
-                {municipios.map((m) => (
-                  <option key={m.id_municipio} value={m.id_municipio}>
-                    {m.nome} / {m.uf}
-                  </option>
-                ))}
-              </select>
+              <div style={{ width: "220px" }}>
+                <SearchableCombobox
+                  value={filterMunicipioId}
+                  emptyOptionLabel="Todos os Municípios"
+                  placeholder="Filtrar município..."
+                  options={municipios.map((m) => ({
+                    value: String(m.id_municipio),
+                    label: `${m.nome} / ${m.uf}`,
+                  }))}
+                  onChange={setFilterMunicipioId}
+                  style={{ padding: "7px 28px 7px 10px", fontSize: "12px", borderRadius: "8px" }}
+                />
+              </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <span style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>Captura:</span>
@@ -248,26 +228,17 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
               <tr style={{ borderBottom: `1px solid ${colors.borderSubtle}`, textAlign: "left", color: colors.onSurfaceVariant }}>
                 <th style={{ padding: "8px 6px" }}>ID</th>
                 <th style={{ padding: "8px 6px" }}>Município / UF</th>
-                <th style={{ padding: "8px 6px" }}>Mês</th>
-                <th style={{ padding: "8px 6px" }}>Ano</th>
                 <th style={{ padding: "8px 6px" }}>Eleitores TSE</th>
-                <th style={{ padding: "8px 6px" }}>Biometria</th>
                 <th style={{ padding: "8px 6px" }}>Pop. IBGE</th>
                 <th style={{ padding: "8px 6px" }}>Captura</th>
                 <th style={{ padding: "8px 6px" }}>Usuário</th>
-                <th style={{ padding: "8px 6px" }}>Organização</th>
                 <th style={{ padding: "8px 6px" }}>Data / Hora</th>
                 <th style={{ padding: "8px 6px" }}>Amostras</th>
                 <th style={{ padding: "8px 6px", textAlign: "right" }}>Ação</th>
               </tr>
             </thead>
             <tbody>
-              {registros.map((r) => {
-                const bioPct =
-                  r.quantidade_eleitores > 0
-                    ? ((Number(r.eleitores_biometria || 0) / Number(r.quantidade_eleitores)) * 100).toFixed(1)
-                    : "0.0";
-                return (
+              {registros.map((r) => (
                   <tr
                     key={r.id_eleitorado_tse}
                     onClick={() => {
@@ -285,18 +256,8 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>
-                      {String(r.mes_referencia).padStart(2, "0")}
-                    </td>
-                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>
-                      {r.ano_referencia}
-                    </td>
                     <td style={{ padding: "8px 6px", color: "#8ab4f8", fontWeight: 700 }}>
                       {Number(r.quantidade_eleitores).toLocaleString("pt-BR")}
-                    </td>
-                    <td style={{ padding: "8px 6px" }}>
-                      {Number(r.eleitores_biometria).toLocaleString("pt-BR")}{" "}
-                      <span style={{ color: colors.onSurfaceVariant, fontSize: "11px" }}>({bioPct}%)</span>
                     </td>
                     <td style={{ padding: "8px 6px", color: "#81c995", fontWeight: 600 }}>
                       {r.populacao_ibge != null ? Number(r.populacao_ibge).toLocaleString("pt-BR") : "—"}
@@ -320,9 +281,6 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
                     </td>
                     <td style={{ padding: "8px 6px", fontSize: "11.5px" }}>
                       {r.usuario_nome ? `${r.usuario_nome} (#${r.id_usuario_captura})` : r.id_usuario_captura ? `#${r.id_usuario_captura}` : "—"}
-                    </td>
-                    <td style={{ padding: "8px 6px", fontSize: "11.5px" }}>
-                      {r.organizacao_nome ? `${r.organizacao_nome} (#${r.id_organizacao})` : r.id_organizacao ? `#${r.id_organizacao}` : "—"}
                     </td>
                     <td style={{ padding: "8px 6px", fontSize: "11px", color: colors.onSurfaceVariant }}>
                       {r.data_captura ? new Date(r.data_captura).toLocaleString("pt-BR") : "—"}
@@ -353,11 +311,10 @@ export function TseIbgeCapturesFeature(): React.JSX.Element {
                       </button>
                     </td>
                   </tr>
-                );
-              })}
+              ))}
               {registros.length === 0 && (
                 <tr>
-                  <td colSpan={13} style={{ padding: "14px 6px", color: colors.onSurfaceVariant }}>
+                  <td colSpan={9} style={{ padding: "14px 6px", color: colors.onSurfaceVariant }}>
                     Nenhum registro encontrado na tabela <code>eleitorado_tse</code>.
                   </td>
                 </tr>

@@ -38,6 +38,7 @@ class ConferenciaRequest(BaseModel):
     id_usuario: Optional[int] = None
     email_usuario: Optional[str] = None
     id_organizacao: Optional[int] = None
+    persistir: bool = False
 
 
 class ConferenciaUniversoResponse(BaseModel):
@@ -256,33 +257,10 @@ async def conferir_e_sincronizar_municipio(
             client, mun["nome"], mun["uf"], mun["codigo_tse"]
         )
 
-    payload_auditoria = f"{mun['codigo_ibge']}|{cod_tse}|{ano_tse}-{mes_tse}|TSE:{eleitores_tse}|IBGE:{pop_ibge}"
+    captura_ts = datetime.now(timezone.utc).isoformat()
+    payload_auditoria = f"{mun['codigo_ibge']}|{cod_tse}|{ano_tse}-{mes_tse}|TSE:{eleitores_tse}|IBGE:{pop_ibge}|{captura_ts}"
     hash_sha256 = hashlib.sha256(payload_auditoria.encode("utf-8")).hexdigest()
     fonte_combinada = f"TSE:{url_tse} | IBGE:{url_ibge}"[:255]
-
-    reg_res = await session.execute(
-        text(
-            """
-            SELECT public.fn_registrar_captura_oficial_tse_ibge(
-                :cod_ibge, :ano_tse, :mes_tse, :eleitores, :biometria,
-                :pop_ibge, :ano_ibge, :fonte, :hash, :cod_tse
-            )
-            """
-        ),
-        {
-            "cod_ibge": mun["codigo_ibge"],
-            "ano_tse": ano_tse,
-            "mes_tse": mes_tse,
-            "eleitores": eleitores_tse,
-            "biometria": biometria,
-            "pop_ibge": pop_ibge,
-            "ano_ibge": ano_ibge,
-            "fonte": fonte_combinada,
-            "hash": hash_sha256,
-            "cod_tse": cod_tse,
-        },
-    )
-    id_registro = int(reg_res.scalar() or 0)
 
     # Resolve usuário conectado e organização para gravar as chaves em eleitorado_tse
     resolved_user_id: Optional[int] = None
@@ -321,24 +299,63 @@ async def conferir_e_sincronizar_municipio(
     if resolved_org_id is None:
         resolved_org_id = 1
 
-    if id_registro > 0:
-        await session.execute(
+    should_persist = payload.persistir if payload is not None else False
+    id_registro = 0
+
+    if should_persist:
+        # Sempre insere um novo registro em eleitorado_tse para manter histórico auditável das bases legais
+        ins_res = await session.execute(
             text(
                 """
-                UPDATE public.eleitorado_tse
-                SET id_usuario_captura = :id_usuario,
-                    id_organizacao = :id_organizacao
-                WHERE id_eleitorado_tse = :id_registro
+                INSERT INTO public.eleitorado_tse (
+                    id_municipio, id_bairro, ano_referencia, mes_referencia,
+                    quantidade_eleitores, eleitores_biometria, populacao_ibge, ano_censo_ibge,
+                    tipo_captura, fonte_endpoint, id_usuario_captura,
+                    data_captura, hash_origem, id_organizacao
+                ) VALUES (
+                    :id_municipio, NULL, :ano_tse, :mes_tse,
+                    :eleitores, :biometria, :pop_ibge, :ano_ibge,
+                    'automatica', :fonte, :id_usuario,
+                    NOW(), :hash, :id_organizacao
+                )
+                RETURNING id_eleitorado_tse
                 """
             ),
             {
+                "id_municipio": mun["id_municipio"],
+                "ano_tse": ano_tse,
+                "mes_tse": mes_tse,
+                "eleitores": eleitores_tse,
+                "biometria": biometria,
+                "pop_ibge": pop_ibge,
+                "ano_ibge": ano_ibge,
+                "fonte": fonte_combinada,
                 "id_usuario": resolved_user_id,
+                "hash": hash_sha256[:64],
                 "id_organizacao": resolved_org_id,
-                "id_registro": id_registro,
+            },
+        )
+        id_registro = int(ins_res.scalar() or 0)
+
+        await session.execute(
+            text(
+                """
+                UPDATE public.municipios
+                SET eleitorado_total = :eleitores,
+                    populacao_total = :pop_ibge,
+                    codigo_tse = COALESCE(:cod_tse, codigo_tse)
+                WHERE id_municipio = :id_municipio
+                """
+            ),
+            {
+                "eleitores": eleitores_tse,
+                "pop_ibge": pop_ibge,
+                "cod_tse": str(cod_tse) if cod_tse is not None else None,
+                "id_municipio": mun["id_municipio"],
             },
         )
 
-    await session.commit()
+        await session.commit()
 
     base_anterior = mun["eleitorado_atual_db"] or eleitores_tse
     divergencia_pct = round(abs(eleitores_tse - base_anterior) / max(base_anterior, 1) * 100, 4)

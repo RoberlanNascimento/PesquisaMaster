@@ -13,6 +13,16 @@ class PesquisasBase(DeclarativeBase):
     pass
 
 
+class EstadoDbModel(PesquisasBase):
+    """Tabela `estados`."""
+
+    __tablename__ = "estados"
+
+    id_estado: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sigla: Mapped[str] = mapped_column(String(2), nullable=False)
+    nome: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
 class MunicipioDbModel(PesquisasBase):
     """Tabela `municipios`."""
 
@@ -20,10 +30,18 @@ class MunicipioDbModel(PesquisasBase):
 
     id_municipio: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
-    estado: Mapped[str] = mapped_column(String(2), nullable=False)
+    id_estado: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("estados.id_estado"), nullable=True
+    )
     codigo_ibge: Mapped[int] = mapped_column(Integer, nullable=False)
     populacao_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     eleitorado_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    estado_rel: Mapped[EstadoDbModel | None] = relationship("EstadoDbModel", lazy="joined")
+
+    @property
+    def estado(self) -> str:
+        return self.estado_rel.sigla if self.estado_rel is not None else ""
 
 
 class AmostraDbModel(PesquisasBase):

@@ -19,8 +19,22 @@ export const SAMPLE_PLAN_PRESETS: readonly SamplePlanPreset[] = [
   { id: "smp-3500", label: "Plano Nacional Presidencial (N = 3.500 • IC 95% • ±1,66 p.p.)", sampleSize: 3500, confidenceLevel: "95%", marginOfError: "1,66 p.p." },
 ];
 
+export interface LinkedSampleSummary {
+  readonly idAmostra: number;
+  readonly descricao: string;
+  readonly tamanhoAmostral: number;
+  readonly margemErro: string;
+  readonly nivelConfianca: string;
+}
+
 export interface SurveyRecord {
   readonly id: string;
+  readonly dbId?: number;
+  readonly dbMunicipioId?: number;
+  readonly dbAmostraId?: number;
+  readonly dbProfissionalId?: number;
+  readonly isBloqueada?: boolean;
+  readonly amostraResumo?: LinkedSampleSummary;
   readonly protocolTse: string;
   readonly title: string;
   readonly office: SurveyOffice;

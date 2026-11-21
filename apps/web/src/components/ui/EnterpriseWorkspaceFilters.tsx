@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 import type { WorkspaceFilterConfig } from "./EnterpriseCrudWorkspaceTypes";
+import { SearchableCombobox } from "./SearchableCombobox";
 
 const { colors, rounded, typography } = NOCTURNE_TOKENS;
 
@@ -71,7 +72,7 @@ export function EnterpriseWorkspaceFilters({
         filters.map((filter) => (
           <div
             key={filter.id}
-            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "180px" }}
           >
             <label
               htmlFor={`filter-${filter.id}`}
@@ -83,26 +84,18 @@ export function EnterpriseWorkspaceFilters({
             >
               {filter.label}
             </label>
-            <select
-              id={`filter-${filter.id}`}
+            <SearchableCombobox
               value={filter.value}
-              onChange={(e) => filter.onChange(e.target.value)}
+              options={filter.options}
+              onChange={(val) => filter.onChange(val)}
+              placeholder={`Pesquisar ${filter.label.toLowerCase()}...`}
               style={{
-                padding: "9px 12px",
+                padding: "9px 30px 9px 12px",
                 fontSize: "13px",
                 borderRadius: rounded.md,
-                border: `1px solid ${colors.borderSubtle}`,
                 backgroundColor: colors.surfaceContainerLow,
-                color: colors.textPrimary,
-                cursor: "pointer",
               }}
-            >
-              {filter.options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         ))}
 

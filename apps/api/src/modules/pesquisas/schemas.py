@@ -28,7 +28,7 @@ class AmostraOut(BaseModel):
 class ProfissionalOut(BaseModel):
     id_profissional: int
     nome: str
-    registro_profissional: str
+    registro_profissional: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

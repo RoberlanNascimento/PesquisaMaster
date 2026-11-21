@@ -25,6 +25,7 @@ export interface MunicipalityRecord {
   readonly name: string;
   readonly uf: string;
   readonly masterPlanLawRef: string;
+  readonly populacaoTotal?: number;
   readonly electorateTotal: number;
 }
 

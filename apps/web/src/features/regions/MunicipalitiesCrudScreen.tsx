@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { EnterpriseCrudWorkspace } from "../../components/ui/EnterpriseCrudWorkspace";
 import { NOCTURNE_BUTTON_STYLES } from "../../lib/designTokens";
-import type { MunicipalityRecord } from "./regionsData";
+import type { MunicipalityRecord, StateRecord } from "./regionsData";
 import { useTerritorialStore } from "./regionsStore";
 import { RegionsFeedbackToast } from "./RegionsCrudShared";
 import { MunicipalityDrawerForm } from "./MunicipalityDrawerForm";
@@ -12,8 +12,56 @@ export function MunicipalitiesCrudScreen(): React.JSX.Element {
   const states = useTerritorialStore((s) => s.states);
   const municipalities = useTerritorialStore((s) => s.municipalities);
   const regions = useTerritorialStore((s) => s.regions);
+  const setStates = useTerritorialStore((s) => s.setStates);
+  const setMunicipalities = useTerritorialStore((s) => s.setMunicipalities);
   const saveMunicipality = useTerritorialStore((s) => s.saveMunicipality);
   const deleteMunicipality = useTerritorialStore((s) => s.deleteMunicipality);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("http://127.0.0.1:8000/api/v1/estados", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch("http://127.0.0.1:8000/api/v1/amostragem/opcoes", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([estData, opData]: [Array<Record<string, unknown>> | null, Record<string, unknown> | null]) => {
+      if (Array.isArray(estData) && estData.length > 0) {
+        const loadedStates: StateRecord[] = estData.map((row) => ({
+          id: `state-${String(row.sigla ?? "").toLowerCase()}`,
+          id_estado: Number(row.id_estado),
+          countryId: "country-br",
+          uf: String(row.sigla ?? "").toUpperCase(),
+          name: String(row.nome ?? ""),
+          ibgeCode: String(row.codigo_ibge ?? ""),
+          macroRegion: String(row.regiao ?? "Brasil"),
+          populacaoTotal: Number(row.populacao_total ?? 0),
+          electorateTotal: Number(row.eleitorado_total ?? 0),
+        }));
+        setStates(loadedStates);
+      }
+
+      const rawMuns = Array.isArray(opData?.municipios)
+        ? (opData.municipios as Array<Record<string, unknown>>)
+        : [];
+      if (rawMuns.length > 0) {
+        const loadedMuns: MunicipalityRecord[] = rawMuns.map((row) => {
+          const uf = String(row.uf ?? "").toUpperCase();
+          return {
+            id: `mun-${row.id_municipio}`,
+            stateId: `state-${uf.toLowerCase()}`,
+            uf,
+            name: String(row.nome ?? ""),
+            ibgeCode: String(row.codigo_ibge ?? ""),
+            populacaoTotal: Number(row.populacao_total ?? 0),
+            electorateTotal: Number(row.eleitorado_total ?? 0),
+            masterPlanLawRef: "Base Oficial IBGE",
+          };
+        });
+        setMunicipalities(loadedMuns);
+      }
+    });
+  }, [setStates, setMunicipalities]);
 
   const [activeTab, setActiveTab] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -120,6 +168,16 @@ export function MunicipalitiesCrudScreen(): React.JSX.Element {
                 <strong style={{ color: "#e5e2e1" }}>{m.name} / {m.uf}</strong>
                 <div style={{ fontSize: "11px", color: "#9aa0a6" }}>{m.masterPlanLawRef}</div>
               </div>
+            ),
+          },
+          {
+            key: "populacaoTotal",
+            header: "População Total",
+            align: "right",
+            render: (m) => (
+              <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                {(m.populacaoTotal ?? 0).toLocaleString("pt-BR")}
+              </span>
             ),
           },
           {

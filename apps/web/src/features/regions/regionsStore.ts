@@ -37,6 +37,7 @@ interface TerritorialStoreState {
   readonly setStates: (states: readonly StateRecord[]) => void;
   readonly saveState: (data: Omit<StateRecord, "id">, editId?: string) => void;
   readonly deleteState: (id: string) => void;
+  readonly setMunicipalities: (municipalities: readonly MunicipalityRecord[]) => void;
   readonly saveMunicipality: (data: Omit<MunicipalityRecord, "id">, editId?: string) => void;
   readonly deleteMunicipality: (id: string) => void;
   readonly setRegions: (regions: readonly MunicipalRegionRecord[]) => void;
@@ -59,6 +60,7 @@ export const useTerritorialStore = create<TerritorialStoreState>((set) => ({
   selectedRegionFilterId: "ALL",
 
   setSelectedRegionFilterId: (id) => set({ selectedRegionFilterId: id }),
+  setMunicipalities: (municipalities) => set({ municipalities }),
 
   saveCountry: (data, editId) =>
     set((state) => {

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
+import { SearchableCombobox } from "../../components/ui/SearchableCombobox";
+import { formatIntegerPtBr, parseIntegerDigits } from "../../lib/numberFormat";
 
 const { colors } = NOCTURNE_TOKENS;
 
@@ -95,6 +97,7 @@ export function AmostraDialogModal({
   readonly initialAmostra: any | null;
   readonly defaultMunicipioId: string;
 }): React.JSX.Element | null {
+  const [selectedUf, setSelectedUf] = useState("");
   const [idMunicipio, setIdMunicipio] = useState("");
   const [descricao, setDescricao] = useState("Amostra Municipal TSE 2026");
   const [metodoAlocacao, setMetodoAlocacao] = useState("hare_niemeyer");
@@ -139,7 +142,10 @@ export function AmostraDialogModal({
     setPreviewSample(null);
 
     if (initialAmostra) {
-      setIdMunicipio(String(initialAmostra.id_municipio ?? ""));
+      const munIdStr = String(initialAmostra.id_municipio ?? "");
+      const munObj = municipios.find((m) => String(m.id_municipio) === munIdStr);
+      setSelectedUf(munObj?.uf ? String(munObj.uf) : String(initialAmostra.uf ?? ""));
+      setIdMunicipio(munIdStr);
       setDescricao(String(initialAmostra.descricao ?? "Amostra Municipal TSE 2026"));
       setMetodoAlocacao(String(initialAmostra.metodo_alocacao ?? "hare_niemeyer"));
       setIdEleitoradoTse(initialAmostra.id_eleitorado_tse ? String(initialAmostra.id_eleitorado_tse) : "");
@@ -155,6 +161,8 @@ export function AmostraDialogModal({
       setTamanhoAmostral(initialAmostra.tamanho_amostral ? String(initialAmostra.tamanho_amostral) : "");
     } else {
       const munId = defaultMunicipioId || (municipios[0] ? String(municipios[0].id_municipio) : "");
+      const munObj = municipios.find((m) => String(m.id_municipio) === munId);
+      setSelectedUf(munObj?.uf ? String(munObj.uf) : "");
       setIdMunicipio(munId);
       setDescricao("Amostra Municipal TSE 2026");
       setMetodoAlocacao("hare_niemeyer");
@@ -180,6 +188,8 @@ export function AmostraDialogModal({
   if (!isOpen) return null;
 
   const handleMunicipioChange = (val: string): void => {
+    const munObj = municipios.find((m) => String(m.id_municipio) === val);
+    if (munObj?.uf) setSelectedUf(String(munObj.uf));
     setIdMunicipio(val);
     const matchingTse = [...eleitoradosTse]
       .filter((e) => String(e.id_municipio) === val)
@@ -366,44 +376,70 @@ export function AmostraDialogModal({
           {/* PARTE 1: ITENS DE CABEÇALHO */}
           <div style={SECTION_BOX}>
             <div style={SECTION_TITLE}>1. Itens de Cabeçalho</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 1fr", gap: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <div>
-                <label style={FIELD_LABEL}>Município *</label>
-                <select
-                  style={FIELD_INPUT}
-                  value={idMunicipio}
-                  onChange={(e) => handleMunicipioChange(e.target.value)}
-                  required
-                >
-                  {municipios.map((m) => (
-                    <option key={m.id_municipio} value={m.id_municipio}>
-                      {m.nome} / {m.uf}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>Descrição da Amostra *</label>
-                <input
-                  style={FIELD_INPUT}
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  required
+                <label style={FIELD_LABEL}>Estado</label>
+                <SearchableCombobox
+                  value={selectedUf}
+                  emptyOptionLabel="Todos os Estados"
+                  placeholder="Digite a UF (ex: PA, SP)..."
+                  options={Array.from(
+                    new Set(
+                      municipios
+                        .map((m) => String(m.uf ?? "").trim())
+                        .filter(Boolean)
+                    )
+                  )
+                    .sort()
+                    .map((uf) => ({ value: uf, label: uf }))}
+                  onChange={(uf) => {
+                    setSelectedUf(uf);
+                    const firstMun = municipios.find((m) => !uf || String(m.uf ?? "") === uf);
+                    if (firstMun) {
+                      handleMunicipioChange(String(firstMun.id_municipio));
+                    }
+                  }}
                 />
               </div>
-              <div>
-                <label style={FIELD_LABEL}>Método de Alocação *</label>
-                <select
-                  style={FIELD_INPUT}
-                  value={metodoAlocacao}
-                  onChange={(e) => setMetodoAlocacao(e.target.value)}
-                  required
-                >
-                  <option value="hare_niemeyer">Hare-Niemeyer (TSE)</option>
-                  <option value="proporcional">Proporcional</option>
-                  <option value="uniforme">Uniforme</option>
-                  <option value="neyman">Neyman (Ótima)</option>
-                </select>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 1fr", gap: "10px" }}>
+                <div>
+                  <label style={FIELD_LABEL}>Município *</label>
+                  <SearchableCombobox
+                    value={idMunicipio}
+                    required
+                    placeholder="Digite o município..."
+                    options={municipios
+                      .filter((m) => !selectedUf || String(m.uf ?? "") === selectedUf)
+                      .map((m) => ({
+                        value: String(m.id_municipio),
+                        label: `${m.nome} / ${m.uf}`,
+                      }))}
+                    onChange={(val) => handleMunicipioChange(val)}
+                  />
+                </div>
+                <div>
+                  <label style={FIELD_LABEL}>Descrição da Amostra *</label>
+                  <input
+                    style={FIELD_INPUT}
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={FIELD_LABEL}>Método de Alocação *</label>
+                  <select
+                    style={FIELD_INPUT}
+                    value={metodoAlocacao}
+                    onChange={(e) => setMetodoAlocacao(e.target.value)}
+                    required
+                  >
+                    <option value="hare_niemeyer">Hare-Niemeyer (TSE)</option>
+                    <option value="proporcional">Proporcional</option>
+                    <option value="uniforme">Uniforme</option>
+                    <option value="neyman">Neyman (Ótima)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -495,10 +531,10 @@ export function AmostraDialogModal({
                 <label style={FIELD_LABEL}>População Esperada (Universo) *</label>
                 <input
                   style={FIELD_INPUT}
-                  type="number"
-                  min="1"
-                  value={populacao}
-                  onChange={(e) => setPopulacao(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIntegerPtBr(populacao)}
+                  onChange={(e) => setPopulacao(parseIntegerDigits(e.target.value))}
                   required
                 />
               </div>

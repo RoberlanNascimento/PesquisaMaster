@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 import { useUiSessionStore } from "../../lib/store";
+import { SearchableCombobox } from "../../components/ui/SearchableCombobox";
+import { formatIntegerPtBr, parseIntegerDigits } from "../../lib/numberFormat";
 import {
   INITIAL_SYNC_OVERLAY,
   TseIbgeSyncOverlay,
@@ -68,11 +70,11 @@ export function EleitoradoTseDialogModal({
   onClose,
   onSave,
   onDelete,
-  onRefreshOpcoes,
+  onRefreshOpcoes: _onRefreshOpcoes,
   municipios,
-  bairros,
+  bairros: _bairros,
   usuarios,
-  eleitoradosTse = [],
+  eleitoradosTse: _eleitoradosTse = [],
   initialRecord = null,
   defaultMunicipioId,
 }: {
@@ -91,6 +93,7 @@ export function EleitoradoTseDialogModal({
   const currentUser = useUiSessionStore((state) => state.currentUser);
   const now = new Date();
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedUf, setSelectedUf] = useState("");
   const [idMunicipio, setIdMunicipio] = useState("");
   const [idBairro, setIdBairro] = useState("");
   const [anoReferencia, setAnoReferencia] = useState(String(now.getFullYear()));
@@ -114,28 +117,12 @@ export function EleitoradoTseDialogModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const findNewestForMunicipio = (munId: string): any | null => {
-    if (!munId) return null;
-    const matches = [...eleitoradosTse]
-      .filter((e) => String(e.id_municipio) === munId)
-      .sort((a, b) => {
-        if ((b.ano_referencia ?? 0) !== (a.ano_referencia ?? 0)) {
-          return (b.ano_referencia ?? 0) - (a.ano_referencia ?? 0);
-        }
-        if ((b.mes_referencia ?? 0) !== (a.mes_referencia ?? 0)) {
-          return (b.mes_referencia ?? 0) - (a.mes_referencia ?? 0);
-        }
-        const dateA = a.data_captura ? new Date(a.data_captura).getTime() : 0;
-        const dateB = b.data_captura ? new Date(b.data_captura).getTime() : 0;
-        if (dateB !== dateA) return dateB - dateA;
-        return (b.id_eleitorado_tse ?? 0) - (a.id_eleitorado_tse ?? 0);
-      });
-    return matches[0] ?? null;
-  };
-
   const populateFromRecord = (rec: any): void => {
+    const munIdStr = String(rec.id_municipio ?? "");
+    const munObj = municipios.find((m) => String(m.id_municipio) === munIdStr);
     setEditingId(rec.id_eleitorado_tse ?? null);
-    setIdMunicipio(String(rec.id_municipio ?? ""));
+    setSelectedUf(munObj?.uf ? String(munObj.uf) : String(rec.uf ?? ""));
+    setIdMunicipio(munIdStr);
     setIdBairro(rec.id_bairro ? String(rec.id_bairro) : "");
     setAnoReferencia(String(rec.ano_referencia ?? new Date().getFullYear()));
     setMesReferencia(String(rec.mes_referencia ?? 1));
@@ -155,8 +142,11 @@ export function EleitoradoTseDialogModal({
 
   const resetForm = (munOverride?: string): void => {
     const munId = munOverride ?? defaultMunicipioId ?? (municipios[0] ? String(municipios[0].id_municipio) : "");
+    const resolvedMunId = munId || (municipios[0] ? String(municipios[0].id_municipio) : "");
+    const munObj = municipios.find((m) => String(m.id_municipio) === resolvedMunId);
     setEditingId(null);
-    setIdMunicipio(munId || (municipios[0] ? String(municipios[0].id_municipio) : ""));
+    setSelectedUf(munObj?.uf ? String(munObj.uf) : "");
+    setIdMunicipio(resolvedMunId);
     setIdBairro("");
     setAnoReferencia(String(new Date().getFullYear()));
     setMesReferencia(String(new Date().getMonth() + 1));
@@ -174,26 +164,23 @@ export function EleitoradoTseDialogModal({
     setErrorMsg("");
   };
 
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setSuccessMsg("");
     if (initialRecord) {
       populateFromRecord(initialRecord);
       return;
     }
     const munId = defaultMunicipioId || (municipios[0] ? String(municipios[0].id_municipio) : "");
-    const latest = findNewestForMunicipio(munId);
-    if (latest) {
-      populateFromRecord(latest);
-    } else {
-      resetForm(munId);
-    }
-  }, [isOpen, initialRecord, defaultMunicipioId, municipios]);
-
-  const bairrosDoMunicipio = useMemo(
-    () => bairros.filter((b) => String(b.id_municipio) === idMunicipio),
-    [bairros, idMunicipio]
-  );
+    resetForm(munId);
+  }, [isOpen, initialRecord, defaultMunicipioId]);
 
   if (!isOpen) return null;
 
@@ -215,6 +202,7 @@ export function EleitoradoTseDialogModal({
         body: JSON.stringify({
           id_usuario: numericUserId,
           email_usuario: currentUser?.email ?? null,
+          persistir: false,
         }),
       });
       if (!res.ok) {
@@ -235,6 +223,7 @@ export function EleitoradoTseDialogModal({
       setQuantidadeEleitores(String(d.eleitorado_tse_oficial ?? 0));
       setEleitoresBiometria(String(d.eleitores_biometria ?? 0));
       setPopulacaoIbge(d.populacao_ibge_oficial != null ? String(d.populacao_ibge_oficial) : "");
+      setAnoCensoIbge(String(d.ano_censo_ibge ?? d.ano_referencia_tse ?? new Date().getFullYear()));
       setTipoCaptura("automatica");
       setFonteEndpoint("https://dadosabertos.tse.jus.br | https://servicodados.ibge.gov.br");
       setHashOrigem(d.hash_auditoria_sha256 ?? "");
@@ -242,15 +231,11 @@ export function EleitoradoTseDialogModal({
       if (d.id_usuario_captura) {
         setIdUsuarioCaptura(String(d.id_usuario_captura));
       }
-      if (d.id_eleitorado_tse_gravado) {
-        setEditingId(Number(d.id_eleitorado_tse_gravado));
-      }
-      await onRefreshOpcoes();
-      const summary = `Dados adquiridos e gravados (#${d.id_eleitorado_tse_gravado}): TSE ${Number(d.eleitorado_tse_oficial).toLocaleString("pt-BR")} eleitores (Biometria: ${Number(d.eleitores_biometria).toLocaleString("pt-BR")}) | IBGE ${Number(d.populacao_ibge_oficial).toLocaleString("pt-BR")} hab.`;
+      const summary = `Dados adquiridos (não salvos ainda): TSE ${Number(d.eleitorado_tse_oficial).toLocaleString("pt-BR")} eleitores (Biometria: ${Number(d.eleitores_biometria).toLocaleString("pt-BR")}) | IBGE ${Number(d.populacao_ibge_oficial).toLocaleString("pt-BR")} hab. Clique em Salvar para gravar no banco.`;
       setSuccessMsg(summary);
       setSyncOverlay({
         status: "success",
-        title: "Dados TSE / IBGE adquiridos com sucesso!",
+        title: "Dados TSE / IBGE carregados!",
         message: summary,
       });
     } catch {
@@ -366,63 +351,50 @@ export function EleitoradoTseDialogModal({
           {/* LOCALIZAÇÃO */}
           <div style={SECTION_BOX}>
             <div style={SECTION_TITLE}>1. Localização Eleitoral</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 0.8fr 0.8fr", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
               <div>
-                <label style={FIELD_LABEL}>Município (id_municipio) *</label>
-                <select
-                  style={FIELD_INPUT}
-                  value={idMunicipio}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const latest = findNewestForMunicipio(val);
-                    if (latest) {
-                      populateFromRecord(latest);
-                    } else {
-                      resetForm(val);
+                <label style={FIELD_LABEL}>Estado</label>
+                <SearchableCombobox
+                  value={selectedUf}
+                  emptyOptionLabel="Todos os Estados"
+                  placeholder="Digite a UF (ex: PA, SP)..."
+                  options={Array.from(
+                    new Set(
+                      municipios
+                        .map((m) => String(m.uf ?? "").trim())
+                        .filter(Boolean)
+                    )
+                  )
+                    .sort()
+                    .map((uf) => ({ value: uf, label: uf }))}
+                  onChange={(uf) => {
+                    setSelectedUf(uf);
+                    const firstMun = municipios.find((m) => !uf || String(m.uf ?? "") === uf);
+                    if (firstMun) {
+                      setIdMunicipio(String(firstMun.id_municipio));
+                      setIdBairro("");
                     }
                   }}
-                  required
-                >
-                  {municipios.map((m) => (
-                    <option key={m.id_municipio} value={m.id_municipio}>
-                      {m.nome} / {m.uf}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>Bairro (id_bairro)</label>
-                <select
-                  style={FIELD_INPUT}
-                  value={idBairro}
-                  onChange={(e) => setIdBairro(e.target.value)}
-                >
-                  <option value="">— Município inteiro (NULL) —</option>
-                  {bairrosDoMunicipio.map((b) => (
-                    <option key={b.id_bairro} value={b.id_bairro}>
-                      {b.nome_bairro}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>Zona Eleitoral</label>
-                <input
-                  style={FIELD_INPUT}
-                  maxLength={10}
-                  placeholder="Ex: 0023"
-                  value={zonaEleitoral}
-                  onChange={(e) => setZonaEleitoral(e.target.value)}
                 />
               </div>
               <div>
-                <label style={FIELD_LABEL}>Seção Eleitoral</label>
-                <input
-                  style={FIELD_INPUT}
-                  maxLength={10}
-                  placeholder="Ex: 0145"
-                  value={secaoEleitoral}
-                  onChange={(e) => setSecaoEleitoral(e.target.value)}
+                <label style={FIELD_LABEL}>Município</label>
+                <SearchableCombobox
+                  value={idMunicipio}
+                  required
+                  placeholder="Digite o município..."
+                  options={municipios
+                    .filter((m) => !selectedUf || String(m.uf ?? "") === selectedUf)
+                    .map((m) => ({
+                      value: String(m.id_municipio),
+                      label: `${m.nome} / ${m.uf}`,
+                    }))}
+                  onChange={(val) => {
+                    const munObj = municipios.find((m) => String(m.id_municipio) === val);
+                    if (munObj?.uf) setSelectedUf(String(munObj.uf));
+                    setIdMunicipio(val);
+                    setIdBairro("");
+                  }}
                 />
               </div>
             </div>
@@ -431,77 +403,54 @@ export function EleitoradoTseDialogModal({
           {/* REFERÊNCIA & QUANTITATIVOS */}
           <div style={SECTION_BOX}>
             <div style={{ ...SECTION_TITLE, color: "#8ab4f8" }}>2. Referência & Quantitativos (TSE / IBGE)</div>
-            <div style={{ display: "grid", gridTemplateColumns: "0.8fr 0.8fr 1.2fr 1.2fr 1.2fr 0.9fr", gap: "10px" }}>
-              <div>
-                <label style={FIELD_LABEL}>Ano Ref. *</label>
-                <input
-                  style={FIELD_INPUT}
-                  type="number"
-                  min="1990"
-                  max="2100"
-                  value={anoReferencia}
-                  onChange={(e) => setAnoReferencia(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>Mês Ref. *</label>
-                <select
-                  style={FIELD_INPUT}
-                  value={mesReferencia}
-                  onChange={(e) => setMesReferencia(e.target.value)}
-                  required
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>
-                      {String(m).padStart(2, "0")}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.2fr 0.9fr", gap: "10px" }}>
               <div>
                 <label style={FIELD_LABEL}>Qtd. Eleitores *</label>
                 <input
-                  style={FIELD_INPUT}
-                  type="number"
-                  min="0"
-                  value={quantidadeEleitores}
-                  onChange={(e) => setQuantidadeEleitores(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>Eleit. Biometria *</label>
-                <input
-                  style={FIELD_INPUT}
-                  type="number"
-                  min="0"
-                  value={eleitoresBiometria}
-                  onChange={(e) => setEleitoresBiometria(e.target.value)}
+                  style={
+                    tipoCaptura === "automatica"
+                      ? { ...FIELD_INPUT, opacity: 0.65, cursor: "not-allowed" }
+                      : FIELD_INPUT
+                  }
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIntegerPtBr(quantidadeEleitores)}
+                  onChange={(e) => setQuantidadeEleitores(parseIntegerDigits(e.target.value))}
+                  readOnly={tipoCaptura === "automatica"}
                   required
                 />
               </div>
               <div>
                 <label style={FIELD_LABEL}>População IBGE</label>
                 <input
-                  style={FIELD_INPUT}
-                  type="number"
-                  min="0"
+                  style={
+                    tipoCaptura === "automatica"
+                      ? { ...FIELD_INPUT, opacity: 0.65, cursor: "not-allowed" }
+                      : FIELD_INPUT
+                  }
+                  type="text"
+                  inputMode="numeric"
                   placeholder="Opcional"
-                  value={populacaoIbge}
-                  onChange={(e) => setPopulacaoIbge(e.target.value)}
+                  value={formatIntegerPtBr(populacaoIbge)}
+                  onChange={(e) => setPopulacaoIbge(parseIntegerDigits(e.target.value))}
+                  readOnly={tipoCaptura === "automatica"}
                 />
               </div>
               <div>
                 <label style={FIELD_LABEL}>Ano Censo IBGE</label>
                 <input
-                  style={FIELD_INPUT}
+                  style={
+                    tipoCaptura === "automatica"
+                      ? { ...FIELD_INPUT, opacity: 0.65, cursor: "not-allowed" }
+                      : FIELD_INPUT
+                  }
                   type="number"
                   min="1990"
                   max="2100"
                   placeholder="2022"
                   value={anoCensoIbge}
                   onChange={(e) => setAnoCensoIbge(e.target.value)}
+                  readOnly={tipoCaptura === "automatica"}
                 />
               </div>
             </div>
@@ -510,7 +459,7 @@ export function EleitoradoTseDialogModal({
           {/* AUDITORIA & CAPTURA */}
           <div style={SECTION_BOX}>
             <div style={{ ...SECTION_TITLE, color: "#fbbc04" }}>3. Auditoria & Captura</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1.8fr", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "10px" }}>
               <div>
                 <label style={FIELD_LABEL}>Tipo Captura *</label>
                 <select
@@ -521,24 +470,6 @@ export function EleitoradoTseDialogModal({
                 >
                   <option value="manual">manual</option>
                   <option value="automatica">automatica</option>
-                </select>
-              </div>
-              <div>
-                <label style={FIELD_LABEL}>
-                  Usuário Captura {tipoCaptura === "manual" ? "*" : "(opcional)"}
-                </label>
-                <select
-                  style={FIELD_INPUT}
-                  value={idUsuarioCaptura}
-                  onChange={(e) => setIdUsuarioCaptura(e.target.value)}
-                  required={tipoCaptura === "manual"}
-                >
-                  <option value="">— Nenhum —</option>
-                  {usuarios.map((u) => (
-                    <option key={u.id_usuario} value={u.id_usuario}>
-                      #{u.id_usuario} — {u.nome}
-                    </option>
-                  ))}
                 </select>
               </div>
               <div>
@@ -557,19 +488,19 @@ export function EleitoradoTseDialogModal({
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "10px" }}>
               <div>
-                <label style={FIELD_LABEL}>Hash de Origem (SHA-256 — gerado automaticamente se vazio)</label>
+                <label style={FIELD_LABEL}>Hash de Origem</label>
                 <input
-                  style={FIELD_INPUT}
+                  style={{ ...FIELD_INPUT, opacity: 0.65, cursor: "not-allowed", color: colors.onSurfaceVariant }}
                   maxLength={64}
                   placeholder="Automático (SHA-256)"
+                  readOnly
                   value={hashOrigem}
-                  onChange={(e) => setHashOrigem(e.target.value)}
                 />
               </div>
               <div>
-                <label style={FIELD_LABEL}>Data de Captura (data_captura)</label>
+                <label style={FIELD_LABEL}>Data de Aquisição</label>
                 <input
-                  style={{ ...FIELD_INPUT, color: colors.onSurfaceVariant }}
+                  style={{ ...FIELD_INPUT, opacity: 0.65, cursor: "not-allowed", color: colors.onSurfaceVariant }}
                   type="text"
                   readOnly
                   value={dataCaptura || "Automática (CURRENT_TIMESTAMP)"}
