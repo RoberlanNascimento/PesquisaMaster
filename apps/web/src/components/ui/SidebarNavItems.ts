@@ -24,6 +24,26 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
     icon: "overview",
   },
   {
+    id: "questionnaires-group",
+    path: "/questionarios",
+    label: "Formulários",
+    icon: "questionnaires",
+    subItems: [
+      {
+        id: "questionnaires",
+        path: "/questionarios",
+        label: "Gerenciador de Questionários",
+        icon: "dot",
+      },
+      {
+        id: "questionnaires-routing",
+        path: "/questionarios/roteamento",
+        label: "Roteamento & Saltos",
+        icon: "dot",
+      },
+    ],
+  },
+  {
     id: "sampling-group",
     path: "/plano-amostral",
     label: "Amostragem",
@@ -85,6 +105,12 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
         label: "Disco de Candidatos",
         icon: "dot",
       },
+      {
+        id: "survey-app-preview",
+        path: "/pesquisas/previa-app",
+        label: "Prévia do App (Eleitor)",
+        icon: "dot",
+      },
     ],
   },
   {
@@ -92,26 +118,6 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
     path: "/distribuicao",
     label: "Distribuição",
     icon: "sampling",
-  },
-  {
-    id: "questionnaires-group",
-    path: "/questionarios",
-    label: "Questionários",
-    icon: "questionnaires",
-    subItems: [
-      {
-        id: "questionnaires",
-        path: "/questionarios",
-        label: "Gerenciador de Questionários",
-        icon: "dot",
-      },
-      {
-        id: "questionnaires-routing",
-        path: "/questionarios/roteamento",
-        label: "Roteamento & Saltos",
-        icon: "dot",
-      },
-    ],
   },
   {
     id: "fieldwork-group",

@@ -11,26 +11,20 @@ from src.core.config import get_settings
 from src.core.exceptions import DomainError, register_exception_handlers
 from src.core.logging import configure_logging, get_correlation_id
 from src.core.middleware import CorrelationIdMiddleware
-from src.modules.aggregator.router import router as aggregator_router
-from src.modules.analytics.router import router as analytics_router
-from src.modules.audit.router import router as audit_router
-from src.modules.auth.router import router as auth_router
-from src.modules.clients.router import router as clients_router
-from src.modules.fieldwork.router import router as fieldwork_router
-from src.modules.pesquisas.bairros_router import bairros_router
 from src.modules.pesquisas.amostragem_router import amostragem_router
-from src.modules.pesquisas.integracoes_router import integracao_router
-from src.modules.pesquisas.tabulacao_ponderada_router import tabulacao_ponderada_router
+from src.modules.pesquisas.auth_router import auth_router as db_auth_router
+from src.modules.pesquisas.bairros_router import bairros_router
 from src.modules.pesquisas.campo_operacoes_router import campo_operacoes_router
 from src.modules.pesquisas.estados_router import estados_router
+from src.modules.pesquisas.integracoes_router import integracao_router
+from src.modules.pesquisas.organizacoes_router import organizacoes_router
+from src.modules.pesquisas.profissionais_router import profissionais_router
+from src.modules.pesquisas.questionarios_db_router import questionarios_db_router
 from src.modules.pesquisas.regioes_router import regioes_router
 from src.modules.pesquisas.router import router as pesquisas_db_router
 from src.modules.pesquisas.tables_router import tables_router
-from src.modules.questionnaires.router import router as questionnaires_router
-from src.modules.regions.router import router as regions_router
-from src.modules.sampling.router import assignments_router
-from src.modules.sampling.router import router as sampling_router
-from src.modules.surveys.router import router as surveys_router
+from src.modules.pesquisas.tabulacao_ponderada_router import tabulacao_ponderada_router
+from src.modules.pesquisas.usuarios_router import usuarios_router
 
 
 class HealthResponseSchema(BaseModel):
@@ -73,21 +67,6 @@ def create_app() -> FastAPI:
     app.include_router(estados_router, prefix=settings.api_v1_prefix)
     app.include_router(regioes_router, prefix=settings.api_v1_prefix)
     app.include_router(bairros_router, prefix=settings.api_v1_prefix)
-    app.include_router(auth_router, prefix=settings.api_v1_prefix)
-    app.include_router(clients_router, prefix=settings.api_v1_prefix)
-    app.include_router(audit_router, prefix=settings.api_v1_prefix)
-    app.include_router(surveys_router, prefix=settings.api_v1_prefix)
-    app.include_router(questionnaires_router, prefix=settings.api_v1_prefix)
-    app.include_router(sampling_router, prefix=settings.api_v1_prefix)
-    app.include_router(assignments_router, prefix=settings.api_v1_prefix)
-    app.include_router(fieldwork_router, prefix=settings.api_v1_prefix)
-    app.include_router(analytics_router, prefix=settings.api_v1_prefix)
-    app.include_router(aggregator_router, prefix=settings.api_v1_prefix)
-    from src.modules.pesquisas.usuarios_router import usuarios_router
-    from src.modules.pesquisas.organizacoes_router import organizacoes_router
-    from src.modules.pesquisas.profissionais_router import profissionais_router
-    from src.modules.pesquisas.auth_router import auth_router as db_auth_router
-    app.include_router(regions_router, prefix=settings.api_v1_prefix)
     app.include_router(usuarios_router, prefix=settings.api_v1_prefix)
     app.include_router(organizacoes_router, prefix=settings.api_v1_prefix)
     app.include_router(profissionais_router, prefix=settings.api_v1_prefix)
@@ -97,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(amostragem_router)
     app.include_router(integracao_router)
     app.include_router(tabulacao_ponderada_router)
+    app.include_router(questionarios_db_router)
 
     @app.get(
         "/health",

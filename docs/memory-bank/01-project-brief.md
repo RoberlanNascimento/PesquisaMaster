@@ -29,10 +29,10 @@ O **PesquisaMaster** é uma plataforma completa de inteligência eleitoral, gest
 4. **Catálogo de Perguntas, Escalas e Questionários: QUESTIONÁRIOS (`questions`):**
    - Banco canônico de enunciados, matrizes e formulação dinâmica de instrumentos CAPI.
    - Tabelas no DB que tratam deste item:
-      - Grupos_Opcoes: Padroniza réguas de resposta reutilizáveis (como escalas Likert, aprovação ou respostas binárias).
+      - Perguntas_Grupos_Opcoes: Padroniza réguas de resposta reutilizáveis (como escalas Likert, aprovação ou respostas binárias).
       - Opcoes_Resposta: Armazena as alternativas individuais de cada régua (rótulo, valor numérico e cor).
       - Perguntas: Repositório canônico de enunciados e tipos lógicos de questão (única, múltipla, matriz, ranking ou texto).
-      - Itens_Bateria: Registra os subitens avaliados em perguntas do tipo matriz ou bateria (ex.: Saúde, Educação, Asfalto).
+      - Perguntas_Itens_Bateria: Registra os subitens avaliados em perguntas do tipo matriz ou bateria (ex.: Saúde, Educação, Asfalto).
       - Questionarios: Representa o formulário estruturado e versionado vinculado a uma pesquisa específica.
       - Questionario_Perguntas: Ordena as questões no formulário e define o formato visual (disco digital, radio group), limites de seleção e saltos lógicos. 
 5. **Usuários, Equipes de Campo, Transferências e Chave Master: ADMINISTRAÇÃO (`administrator`):**

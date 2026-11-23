@@ -62,6 +62,8 @@ export interface BackendPesquisaOut {
   readonly amostra?: BackendAmostraOut | null;
   readonly profissional?: BackendProfissionalOut | null;
   readonly usuario?: BackendUsuarioOut | null;
+  readonly id_usuario_criador?: number | null;
+  readonly usuario_criador_nome?: string | null;
 }
 
 export interface PesquisaCreatePayload {
@@ -73,6 +75,7 @@ export interface PesquisaCreatePayload {
   readonly id_amostra: number;
   readonly id_profissional: number;
   readonly id_usuario?: number;
+  readonly id_usuario_criador?: number | null;
   readonly status?: string;
 }
 
@@ -174,6 +177,8 @@ export function mapBackendToSurveyRecord(item: BackendPesquisaOut): SurveyRecord
     dbMunicipioId: item.municipio?.id_municipio,
     dbAmostraId: item.amostra?.id_amostra,
     dbProfissionalId: item.profissional?.id_profissional,
+    createdByUserId: item.id_usuario_criador ?? item.usuario?.id_usuario ?? undefined,
+    createdByName: item.usuario_criador_nome ?? item.usuario?.nome ?? undefined,
     isBloqueada: item.is_bloqueada,
     amostraResumo: item.amostra
       ? {

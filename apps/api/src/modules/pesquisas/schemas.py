@@ -58,6 +58,8 @@ class PesquisaOut(BaseModel):
     amostra: AmostraOut | None = None
     profissional: ProfissionalOut | None = None
     usuario: UsuarioOut | None = None
+    id_usuario_criador: int | None = None
+    usuario_criador_nome: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +73,7 @@ class PesquisaCreate(BaseModel):
     id_amostra: int
     id_profissional: int
     id_usuario: int = 1
+    id_usuario_criador: int | None = None
     status: str = "processando"
 
 

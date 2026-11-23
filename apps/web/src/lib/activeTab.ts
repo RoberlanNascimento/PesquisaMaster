@@ -50,5 +50,6 @@ export type ActiveTab =
   | "catalog-answer-options"
   | "audit-reassignment"
   | "survey-scenario-candidates"
+  | "survey-app-preview"
   | "tabulation-reports";
 

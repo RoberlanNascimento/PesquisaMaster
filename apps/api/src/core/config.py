@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Variáveis de ambiente e parâmetros operacionais da API."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -38,6 +38,13 @@ class Settings(BaseSettings):
         default="dev-only-hmac-field-secret-change-in-production-32-chars",
         min_length=32,
     )
+
+    # Google Cloud Storage (GCS)
+    gcs_project_id: str | None = "Pesquisas"
+    gcs_bucket_name: str | None = "psequisas_candidatos"
+    gcs_credentials_path: str | None = None
+    google_application_credentials: str | None = None
+    gcs_signed_url_expiration_minutes: int = 60
 
 
 @lru_cache

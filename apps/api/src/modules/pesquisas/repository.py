@@ -42,7 +42,10 @@ class PesquisasRepository:
         return res.scalar_one_or_none()
 
     async def create(self, payload: PesquisaCreate) -> PesquisaDbModel:
-        model = PesquisaDbModel(**payload.model_dump())
+        data = payload.model_dump()
+        if data.get("id_usuario_criador") is None:
+            data["id_usuario_criador"] = data.get("id_usuario") or 1
+        model = PesquisaDbModel(**data)
         self.session.add(model)
         await self.session.commit()
         await self.session.refresh(model)

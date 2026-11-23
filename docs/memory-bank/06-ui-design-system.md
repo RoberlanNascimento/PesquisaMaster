@@ -18,8 +18,9 @@ Toda página do aplicativo DEVE ser envolvida pelo componente padrão `<Standard
   - **Ação de Edição & Alerta em Amarelo Pastel (`✏️ Editar`, `✏️ Ajustar`, `⚖️ Recalibrar Raking`, `Alertas`):** Container `#3b2e08` com borda `1px solid #fde293` e texto `#fde293` para botões de editar e badges de alerta; ou fundo sólido amarelo pastel `#fde293` / `#fdd663` com texto escuro `#332200` para travas/alertas de alta ênfase.
   - **Ação Destrutiva / Reprovação / Expurgo (`✕ Reprovar`, `Revogar Acesso`):** Fundo `#93000a` ou `#f28b82`, texto `#ffdad6` ou `#690005`.
   - **Ação Ghost / Outlined (`👁 Detalhes`, `Exportar`, `Cancelar`):** Fundo `var(--surface-card)`, borda `1px solid var(--border-subtle)`, texto `var(--text-primary)`.
-- **Tipografia & Formatos:**
-  - Fonte uniforme **`Roboto Flex`** (`display-lg` 36px, `headline-lg` 28px, `headline-md` 20px, `title-md` 18px, `body-lg` 16px, `body-md` 14px, `label-md` 14px, `caption` 12px).
+- **Tipografia & Formatos (Escala Global +2pt / +2px):**
+  - Fonte uniforme **`Roboto Flex`** com ajuste global de **+2pt (+2px)** em toda a escala tipográfica para maior legibilidade: `display-lg` 38px, `headline-lg` 30px, `headline-md` 22px, `title-md` 20px, `body-lg` 18px, `body-md` 16px, `label-md` 16px, `caption` 14px.
+  - **Nota de Regra Permanente:** Todos os caracteres e tamanhos de fonte do sistema devem respeitar o acréscimo global de **+2 pontos (+2px)** sobre a escala base original.
   - Raios de borda: Cards/Painéis (`1rem` / `16px`), Inputs/Botões (`0.75rem` / `12px`), Chips/Badges/Pills (`9999px`).
   - Largura máxima de conteúdo: `1280px` centrada no `<StandardPageTemplate>`.
 
@@ -32,13 +33,13 @@ O layout global do sistema NÃO utiliza barra de navegação superior (`<TopNavb
    - **Menu Expandido (`260px`):** Exibe à esquerda a insígnia compacta da logo **`PM`** (`24px × 24px`, `font-size: 10px`, `border-radius: 6px`, reduzida em 30%) + o nome **`PesquisaMaster`**, e **ajustados à direita** (`margin-left: auto`) os botões monocromáticos de **Pesquisar (`⌕`)** (`btn-sidebar-search`) e **Recolher Menu (`◧`)** (`btn-toggle-sidebar`).
    - **Menu Recolhido (`72px`):** Os botões de pesquisar (`⌕`) e de recolher (`◧`), bem como o nome da empresa, ficam **totalmente ocultos**, restando apenas a logo **`PM`** centralizada. Ao **clicar na logo `PM`** com a sidebar recolhida, a navbar **expande novamente**.
 2. **Corpo de Navegação Rolável (`<nav>`, `flex: 1; overflow-y: auto`):**
-   - **Design Minimalista Monocromático:** Todos os botões de menu (`font-size: 14px`) e submenus (`font-size: 13.5px` / `13px`) usam formato pílula (`border-radius: 9999px`), exibindo **apenas o ícone monocromático** (`◫`, `❐`, `▤`, `⊞`, `✎`, `⚙`, `◩`, `◰`, `◎`, `◳`, `◱`, `◲`, `⛨`, `⚖`, `⟠`, `◧`, `⚿`, `⊶`, `⊡`, `⌕`, `◬`, `◪`, `◈`) e o **nome do botão** — **sem linhas guias verticais** (`border-left: none`), sem setas (`↳`) e sem chevrons (`▼`).
+   - **Design Minimalista Monocromático:** Todos os botões de menu (`font-size: 16px`) e submenus (`font-size: 14px`) usam formato pílula (`border-radius: 9999px`), exibindo **apenas o ícone monocromático** (`◫`, `❐`, `▤`, `⊞`, `✎`, `⚙`, `◩`, `◰`, `◎`, `◳`, `◱`, `◲`, `⛨`, `⚖`, `⟠`, `◧`, `⚿`, `⊶`, `⊡`, `⌕`, `◬`, `◪`, `◈`) e o **nome do botão** — **sem linhas guias verticais** (`border-left: none`), sem setas (`↳`) e sem chevrons (`▼`).
    - **Comportamento Acordeão de Submenus:** Clicar em um botão que possui submenus na lista principal (**Gestão de Pesquisas TSE** [`Pesquisas`, `Composição de Pesquisas`, `Construtor de Questionários`]) **expande** seus subitens; clicar novamente nele mesmo ou clicar em qualquer outro botão de menu **recolhe automaticamente** os subitens abertos. Os grupos `Configurações`, `Empresa` e `Auditoria` não ficam na lista principal da sidebar, sendo acessados pelo menu suspenso no rodapé.
 3. **Barra Inferior Fixa da Sidebar (`sidebar-footer-region`, `flex-shrink: 0`) e Menu Suspenso de Configurações (`SidebarSettingsDropdown`):**
    - Permanece **fixa no rodapé** da sidebar e apresenta exclusivamente:
      - **Menu Expandido (`260px`):** Layout horizontal (`flex-direction: row`). À esquerda: avatar circular (`HV`, `26px × 26px`) e **nome do usuário conectado** (`Dra. Helena Vasconcelos`); à direita: botão de **Configurações (`⚙`)** (`btn-sidebar-footer-settings`);
      - **Menu Recolhido (`72px`):** Layout vertical invertido (`flex-direction: column-reverse`). O botão de **Configurações (`⚙`)** posiciona-se **acima do ícone do usuário conectado** (`sidebar-user-avatar`), centralizado horizontalmente (`gap: 12px`, `padding: 14px 8px`);
-     - **Menu Suspenso Flutuante (`sidebar-settings-dropdown`):** Acionado pelo botão `⚙`, abre ancorado ao rodapé contendo:
+     - **Menu Suspenso Flutuante (`sidebar-settings-dropdown`):** Acionado pelo botão `⚙`, abre ancorado ao rodapé com grupos em `font-size: 16px` e itens em `font-size: 14px` (subitens `13px`), contendo:
        - Grupo **Configurações**: botões **Planejamento Amostral** (`/plano-amostral`) e **Regiões** (que expande **País**, **Estados**, **Municípios**, **Regiões** e **Bairros**, linkados às suas respectivas telas exclusivas de CRUD);
        - Grupo **Empresa**: botões **Gerenciar** (`nav-client-company` $\rightarrow$ `/clientes`), **Usuários** (`nav-users-rbac` $\rightarrow$ `/usuarios-rbac`) e **Pesquisadores** (`nav-researchers` $\rightarrow$ `/pesquisadores`);
        - Grupo **Auditoria**: botão **Auditoria** (`nav-security-audit` $\rightarrow$ `/auditoria-antiga`), linkado à página de Auditoria Hash-Chain SHA-256.
@@ -50,7 +51,7 @@ Nenhuma tela pode ser entregue apenas com uma tabela solta. Na **área central**
 3. **KPI Summary Cards:** Cartões executivos em `#202020` (`border: 1px solid #353535`) resumindo os totais da visão atual.
 4. **Filter & Combobox Bar:** Grade responsiva com Comboboxes tipados + campo de busca com *debounce* (300ms) + botão `Limpar Filtros`.
 5. **Data Grid com Ações de Linha e de Lote:**
-   - Cabeçalho fixo (`#1b1c1c`, texto `11px` uppercase bold em `#9aa0a6`);
+   - Cabeçalho fixo (`#1b1c1c`, texto `13px` uppercase bold em `#9aa0a6`);
    - Seleção múltipla via checkbox com barra flutuante de ação em lote;
    - Coluna final à direita (`text-right`) reservada exclusivamente para os botões rápidos de CRUD (`👁 Ver`, `✏️ Editar`, `🚫 Inativar/Reprovar`).
    - Rodapé de paginação com seletor de itens por página (`10`, `25`, `50`, `100`) e contador total de registros.

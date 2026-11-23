@@ -33,7 +33,7 @@ async def list_estados(session: DbSessionDep, limit: int = 50) -> list[dict[str,
 async def list_perguntas(session: DbSessionDep, limit: int = 50) -> list[dict[str, Any]]:
     query = text(
         "SELECT p.*, g.nome_grupo, g.tipo_escala FROM perguntas p "
-        "LEFT JOIN grupos_opcoes g ON p.id_grupo_opcao = g.id_grupo_opcao "
+        "LEFT JOIN perguntas_grupos_opcoes g ON p.id_grupo_opcao = g.id_grupo_opcao "
         "ORDER BY p.id_pergunta ASC LIMIT :lim"
     )
     res = await session.execute(query, {"lim": limit})
@@ -148,10 +148,10 @@ async def list_dimensoes(session: DbSessionDep, limit: int = 50) -> list[dict[st
     return [dict(r._mapping) for r in res.fetchall()]
 
 
-@tables_router.get("/escalas", summary="Lista réguas e escalas (grupos_opcoes)")
+@tables_router.get("/escalas", summary="Lista réguas e escalas (perguntas_grupos_opcoes)")
 async def list_escalas(session: DbSessionDep, limit: int = 50) -> list[dict[str, Any]]:
     query = text(
-        "SELECT g.*, COUNT(o.id_opcao) AS total_opcoes FROM grupos_opcoes g "
+        "SELECT g.*, COUNT(o.id_opcao) AS total_opcoes FROM perguntas_grupos_opcoes g "
         "LEFT JOIN opcoes_resposta o ON g.id_grupo_opcao = o.id_grupo_opcao "
         "GROUP BY g.id_grupo_opcao ORDER BY g.id_grupo_opcao ASC LIMIT :lim"
     )
@@ -163,17 +163,17 @@ async def list_escalas(session: DbSessionDep, limit: int = 50) -> list[dict[str,
 async def list_opcoes_resposta(session: DbSessionDep, limit: int = 50) -> list[dict[str, Any]]:
     query = text(
         "SELECT o.*, g.nome_grupo FROM opcoes_resposta o "
-        "LEFT JOIN grupos_opcoes g ON o.id_grupo_opcao = g.id_grupo_opcao "
+        "LEFT JOIN perguntas_grupos_opcoes g ON o.id_grupo_opcao = g.id_grupo_opcao "
         "ORDER BY o.id_grupo_opcao ASC, o.ordem_exibicao ASC LIMIT :lim"
     )
     res = await session.execute(query, {"lim": limit})
     return [dict(r._mapping) for r in res.fetchall()]
 
 
-@tables_router.get("/itens-bateria", summary="Lista subitens de bateria (itens_bateria)")
+@tables_router.get("/itens-bateria", summary="Lista subitens de bateria (perguntas_itens_bateria)")
 async def list_itens_bateria(session: DbSessionDep, limit: int = 50) -> list[dict[str, Any]]:
     query = text(
-        "SELECT ib.*, p.texto_pergunta FROM itens_bateria ib "
+        "SELECT ib.*, p.texto_pergunta FROM perguntas_itens_bateria ib "
         "LEFT JOIN perguntas p ON ib.id_pergunta = p.id_pergunta "
         "ORDER BY ib.id_pergunta ASC, ib.ordem ASC LIMIT :lim"
     )

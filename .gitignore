@@ -1,0 +1,18 @@
+# Credenciais e variáveis de ambiente (NUNCA versionar)
+.env
+*.env
+.env.*
+credenciais-*.json
+*service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Web
+node_modules/
+dist/
+.vite/

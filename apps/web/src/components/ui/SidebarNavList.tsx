@@ -64,10 +64,11 @@ export function SidebarNavList({
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
                   <SidebarIcon
                     name={item.icon}
-                    size={17}
+                    size={19}
                     style={{
                       color: isActive ? "#d1d5db" : "#ffffff",
                       transition: "color 0.15s ease",
+                      flexShrink: 0,
                     }}
                   />
                   {!isCollapsed && (
@@ -77,7 +78,8 @@ export function SidebarNavList({
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         fontWeight: 700,
-                        fontSize: "13px",
+                        fontSize: "16px",
+                        lineHeight: "22px",
                       }}
                     >
                       {item.label}
@@ -128,7 +130,7 @@ export function SidebarNavList({
                           onClick={() => onSubItemClick(item.id, sub)}
                           style={{
                             ...getSubNavBtnStyle(isSubActive),
-                            fontSize: "12px",
+                            fontSize: "14px",
                             padding: "6px 8px",
                             color: isSubActive ? "#ffffff" : "#94a3b8",
                             fontWeight: isSubActive ? 600 : 400,

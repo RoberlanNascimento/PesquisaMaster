@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { EnterpriseCrudWorkspace } from "../../components/ui/EnterpriseCrudWorkspace";
 import { ConfirmDialogModal } from "../../components/ui/ConfirmDialogModal";
-import { INITIAL_SURVEYS } from "./surveysData";
+import { INITIAL_SURVEYS, type SurveyRecord } from "./surveysData";
+import { fetchPesquisasFromDb } from "./pesquisasApi";
 import {
+  QUESTIONNAIRE_TEMPLATES,
   useSurveyCompositionStore,
   type SurveyCompositionRecord,
   type SurveyCompositionFormData,
@@ -11,9 +13,28 @@ import {
   getCompositionTabs,
   getCompositionKpis,
   getCompositionFilters,
-  COMPOSITION_COLUMNS,
+  getCompositionColumns,
 } from "./surveyCompositionConfig";
-import { SurveyCompositionDrawerForm } from "./SurveyCompositionDrawerForm";
+import {
+  SurveyCompositionDrawerForm,
+  type QuestionnaireOption,
+} from "./SurveyCompositionDrawerForm";
+
+interface BackendQuestionnaireRow {
+  readonly id_questionario: number;
+  readonly titulo?: string | null;
+  readonly versao?: string | null;
+  readonly total_perguntas?: number | null;
+}
+
+interface BackendQuestionnaireQuestionLink {
+  readonly id_questionario: number;
+}
+
+interface QuestionariosResumoResponse {
+  readonly questionarios?: readonly BackendQuestionnaireRow[];
+  readonly questionario_perguntas?: readonly BackendQuestionnaireQuestionLink[];
+}
 
 const ROW_BTN_STYLE: React.CSSProperties = {
   padding: "5px 10px",
@@ -31,6 +52,10 @@ export function SurveyCompositionFeature(): React.JSX.Element {
   const upsertComposition = useSurveyCompositionStore((s) => s.upsertComposition);
   const deleteComposition = useSurveyCompositionStore((s) => s.deleteComposition);
 
+  const [surveys, setSurveys] = useState<readonly SurveyRecord[]>(INITIAL_SURVEYS);
+  const [questionnaires, setQuestionnaires] =
+    useState<readonly QuestionnaireOption[]>(QUESTIONNAIRE_TEMPLATES);
+
   const [activeTab, setActiveTab] = useState<string>("TODAS");
   const [search, setSearch] = useState<string>("");
   const [filterSurvey, setFilterSurvey] = useState<string>("ALL");
@@ -41,6 +66,61 @@ export function SurveyCompositionFeature(): React.JSX.Element {
   const [editingItem, setEditingItem] = useState<SurveyCompositionRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SurveyCompositionRecord | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    fetchPesquisasFromDb()
+      .then((dbSurveys) => {
+        if (active && dbSurveys.length > 0) {
+          setSurveys(dbSurveys);
+        }
+      })
+      .catch(() => {
+        // Fallback to INITIAL_SURVEYS when API is offline/unavailable
+      });
+
+    fetch("http://127.0.0.1:8000/api/v1/questionarios-db/resumo", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? (res.json() as Promise<QuestionariosResumoResponse>) : null))
+      .then((data) => {
+        if (!active || !data || !Array.isArray(data.questionarios) || data.questionarios.length === 0) {
+          return;
+        }
+        const links = Array.isArray(data.questionario_perguntas)
+          ? data.questionario_perguntas
+          : [];
+        setQuestionnaires(
+          data.questionarios.map((q) => {
+            const linkedCount = links.filter(
+              (qp) => qp.id_questionario === q.id_questionario,
+            ).length;
+            const questionsCount =
+              links.length > 0
+                ? linkedCount
+                : typeof q.total_perguntas === "number"
+                  ? q.total_perguntas
+                  : 0;
+            return {
+              id: `db-quest-${q.id_questionario}`,
+              code: q.versao ? `Q-${q.id_questionario} (${q.versao})` : `Q-${q.id_questionario}`,
+              title: q.titulo?.trim() || `Questionário #${q.id_questionario}`,
+              questionsCount,
+              estimatedSeconds: questionsCount * 20,
+            };
+          }),
+        );
+      })
+      .catch(() => {
+        // Fallback to QUESTIONNAIRE_TEMPLATES when API is offline/unavailable
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredCompositions = useMemo(() => {
     return compositions.filter((c) => {
@@ -62,6 +142,7 @@ export function SurveyCompositionFeature(): React.JSX.Element {
 
   const tabs = useMemo(() => getCompositionTabs(compositions), [compositions]);
   const kpis = useMemo(() => getCompositionKpis(compositions), [compositions]);
+  const columns = useMemo(() => getCompositionColumns(questionnaires), [questionnaires]);
   const filters = useMemo(
     () =>
       getCompositionFilters(
@@ -76,8 +157,7 @@ export function SurveyCompositionFeature(): React.JSX.Element {
   );
 
   const handleSave = (data: SurveyCompositionFormData): void => {
-    const survey =
-      INITIAL_SURVEYS.find((s) => s.id === data.surveyId) ?? INITIAL_SURVEYS[0]!;
+    const survey = surveys.find((s) => s.id === data.surveyId) ?? surveys[0] ?? INITIAL_SURVEYS[0]!;
     const newRecord: SurveyCompositionRecord = {
       id: editingItem?.id ?? `comp-surv-${Date.now()}`,
       surveyId: survey.id,
@@ -92,7 +172,7 @@ export function SurveyCompositionFeature(): React.JSX.Element {
         data.status === "TRAVADA_SHA256"
           ? `sha256-${Date.now().toString(16)}-comp`
           : editingItem?.sha256Signature ?? "sha256-homolog-tse-ready",
-      updatedAt: "2026-11-06",
+      updatedAt: new Date().toISOString().slice(0, 10),
     };
     upsertComposition(newRecord);
     setFeedbackToast(
@@ -105,7 +185,7 @@ export function SurveyCompositionFeature(): React.JSX.Element {
       ...item,
       status: "TRAVADA_SHA256",
       sha256Signature: `sha256-${Date.now().toString(16)}-locked`,
-      updatedAt: "2026-11-06",
+      updatedAt: new Date().toISOString().slice(0, 10),
     });
     setFeedbackToast(
       `Caderno ${item.compositionVersion} (${item.surveyProtocolTse}) travado com assinatura SHA-256!`
@@ -153,7 +233,7 @@ export function SurveyCompositionFeature(): React.JSX.Element {
           setFilterOffice("ALL");
           setFilterStatus("ALL");
         }}
-        columns={COMPOSITION_COLUMNS}
+        columns={columns}
         data={filteredCompositions}
         keyExtractor={(c) => c.id}
         renderRowActions={(c) => (
@@ -195,6 +275,8 @@ export function SurveyCompositionFeature(): React.JSX.Element {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initialData={editingItem}
+        surveys={surveys}
+        questionnaires={questionnaires}
         onSave={handleSave}
       />
 
@@ -216,4 +298,3 @@ export function SurveyCompositionFeature(): React.JSX.Element {
     </div>
   );
 }
-

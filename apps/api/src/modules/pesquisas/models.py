@@ -113,6 +113,10 @@ class PesquisaDbModel(PesquisasBase):
     id_usuario: Mapped[int] = mapped_column(
         Integer, ForeignKey("usuarios.id_usuario"), nullable=False
     )
+    id_usuario_criador: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("usuarios.id_usuario"), nullable=True
+    )
+    id_organizacao: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_bloqueada: Mapped[bool] = mapped_column(Boolean, default=False)
     fechada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fechada_por: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -138,3 +142,14 @@ class PesquisaDbModel(PesquisasBase):
     usuario: Mapped[UsuarioDbModel | None] = relationship(
         "UsuarioDbModel", foreign_keys=[id_usuario], lazy="joined"
     )
+    usuario_criador: Mapped[UsuarioDbModel | None] = relationship(
+        "UsuarioDbModel", foreign_keys=[id_usuario_criador], lazy="joined"
+    )
+
+    @property
+    def usuario_criador_nome(self) -> str | None:
+        if self.usuario_criador is not None:
+            return self.usuario_criador.nome
+        if self.usuario is not None:
+            return self.usuario.nome
+        return None

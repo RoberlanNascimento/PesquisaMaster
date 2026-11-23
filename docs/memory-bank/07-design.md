@@ -68,53 +68,58 @@ colors:
 typography:
   display-lg:
     fontFamily: Roboto Flex
-    fontSize: 36px
+    fontSize: 38px
     fontWeight: '600'
-    lineHeight: 44px
+    lineHeight: 46px
     letterSpacing: -0.02em
   headline-lg:
     fontFamily: Roboto Flex
-    fontSize: 28px
+    fontSize: 30px
     fontWeight: '600'
-    lineHeight: 36px
+    lineHeight: 38px
     letterSpacing: -0.015em
   headline-lg-mobile:
     fontFamily: Roboto Flex
-    fontSize: 22px
+    fontSize: 24px
     fontWeight: '600'
-    lineHeight: 28px
+    lineHeight: 30px
     letterSpacing: -0.01em
   headline-md:
     fontFamily: Roboto Flex
-    fontSize: 20px
+    fontSize: 22px
     fontWeight: '500'
-    lineHeight: 28px
+    lineHeight: 30px
     letterSpacing: -0.01em
   title-md:
     fontFamily: Roboto Flex
-    fontSize: 18px
+    fontSize: 20px
     fontWeight: '500'
-    lineHeight: 24px
+    lineHeight: 26px
   body-lg:
+    fontFamily: Roboto Flex
+    fontSize: 18px
+    fontWeight: '400'
+    lineHeight: 26px
+  body-md:
     fontFamily: Roboto Flex
     fontSize: 16px
     fontWeight: '400'
     lineHeight: 24px
-  body-md:
-    fontFamily: Roboto Flex
-    fontSize: 14px
-    fontWeight: '400'
-    lineHeight: 22px
   label-md:
     fontFamily: Roboto Flex
-    fontSize: 14px
+    fontSize: 16px
     fontWeight: '500'
-    lineHeight: 20px
+    lineHeight: 22px
+  sidebar-nav-item:
+    fontFamily: Roboto Flex
+    fontSize: 16px
+    fontWeight: '700'
+    lineHeight: 22px
   caption:
     fontFamily: Roboto Flex
-    fontSize: 12px
+    fontSize: 14px
     fontWeight: '400'
-    lineHeight: 16px
+    lineHeight: 18px
     letterSpacing: 0.01em
 rounded:
   sm: 0.25rem
@@ -159,7 +164,8 @@ The type system is powered uniformly by **Roboto Flex**, relying on its optical 
 
 - **Headlines & Display:** Tighter tracking (`-0.015em` to `-0.02em`) creates a compact, authoritative editorial presence across titles and article headers.
 - **Body Content:** Generous 1.5x line heights provide open, fatigue-free scanning across long paragraphs on dark backgrounds.
-- **Labels & Captions:** Distinct mid-weights (`500`) paired with subtle tracking expansions ensure form inputs, pill chips, and metadata timestamps maintain strong clarity even when scaled down to 12px.
+- **Labels & Captions:** Distinct mid-weights (`500`) paired with subtle tracking expansions ensure form inputs, pill chips, and metadata timestamps maintain strong clarity even when scaled down to 14px.
+- **Global Typography Scale Adjustment (+2pt / +2px):** All typography tokens in this specification include a permanent **+2pt (+2px)** increase over the original baseline (`display-lg` 38px down to `caption` 14px) to maximize readability across all screens.
 
 ## Layout & Spacing
 

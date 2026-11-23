@@ -135,6 +135,10 @@ export function SurveysManagementFeature(): React.JSX.Element {
             ? parsedAmostra
             : (aux.amostras[0]?.id_amostra ?? 1);
         const idProfissional = aux.profissionais[0]?.id_profissional ?? 1;
+        const rawUserId = useUiSessionStore.getState().currentUser?.id;
+        const parsedUserId = rawUserId !== undefined ? Number(rawUserId) : Number.NaN;
+        const creatorUserId =
+          Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : undefined;
 
         const created = await createPesquisaInDb({
           nome: formData.title,
@@ -144,6 +148,7 @@ export function SurveysManagementFeature(): React.JSX.Element {
           id_municipio: idMunicipio,
           id_amostra: idAmostra,
           id_profissional: idProfissional,
+          ...(creatorUserId !== undefined ? { id_usuario_criador: creatorUserId } : {}),
           status: "processando",
         });
         setSurveys((prev) => [created, ...prev]);
@@ -462,6 +467,7 @@ export function SurveysManagementFeature(): React.JSX.Element {
                         <div style={{ fontWeight: 500, color: colors.textPrimary }}>{s.title}</div>
                         <div style={{ fontSize: "11px", color: colors.textMuted, marginTop: "2px" }}>
                           {s.fieldStartDate} a {s.fieldEndDate}
+                          {s.createdByName ? ` • Criado por ${s.createdByName}` : ""}
                         </div>
                       </td>
                       <td style={{ padding: "12px 16px", color: colors.textMuted, whiteSpace: "nowrap" }}>

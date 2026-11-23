@@ -33,6 +33,8 @@ export interface SurveyRecord {
   readonly dbMunicipioId?: number;
   readonly dbAmostraId?: number;
   readonly dbProfissionalId?: number;
+  readonly createdByUserId?: number;
+  readonly createdByName?: string;
   readonly isBloqueada?: boolean;
   readonly amostraResumo?: LinkedSampleSummary;
   readonly protocolTse: string;

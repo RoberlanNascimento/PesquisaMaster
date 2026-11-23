@@ -8,6 +8,7 @@ import {
   QUESTIONNAIRE_TEMPLATES,
   type SurveyCompositionRecord,
 } from "./surveyCompositionData";
+import type { QuestionnaireOption } from "./SurveyCompositionDrawerForm";
 
 const COMPOSITION_BADGES: Record<
   SurveyCompositionRecord["status"],
@@ -128,95 +129,109 @@ export function getCompositionFilters(
   ];
 }
 
-export const COMPOSITION_COLUMNS: readonly WorkspaceColumn<SurveyCompositionRecord>[] = [
-  {
-    key: "protocol",
-    header: "Protocolo & Versão",
-    width: "155px",
-    render: (c) => (
-      <div>
-        <strong style={{ color: "#8ab4f8" }}>{c.surveyProtocolTse}</strong>
-        <div style={{ fontSize: "11px", color: "#9aa0a6", fontFamily: "monospace" }}>
-          Caderno {c.compositionVersion}
-        </div>
-      </div>
-    ),
-  },
-  {
-    key: "surveyTitle",
-    header: "Pesquisa TSE Destino",
-    render: (c) => (
-      <div>
-        <div style={{ fontWeight: 600, color: "#e5e2e1" }}>{c.surveyTitle}</div>
-        <div style={{ fontSize: "11px", color: "#9aa0a6" }}>
-          Cargo: {c.office} • {c.cityUf}
-        </div>
-      </div>
-    ),
-  },
-  {
-    key: "questionnaires",
-    header: "Questionários Juntados na Pesquisa (Ordem de Aplicação)",
-    render: (c) => {
-      const blocks = c.questionnaireIds
-        .map((id) => QUESTIONNAIRE_TEMPLATES.find((t) => t.id === id))
-        .filter(Boolean);
-      const totalQ = blocks.reduce((acc, b) => acc + (b?.questionsCount ?? 0), 0);
-      const totalSec = blocks.reduce((acc, b) => acc + (b?.estimatedSeconds ?? 0), 0);
-      return (
+export function getCompositionColumns(
+  questionnaires: readonly QuestionnaireOption[] = QUESTIONNAIRE_TEMPLATES
+): readonly WorkspaceColumn<SurveyCompositionRecord>[] {
+  return [
+    {
+      key: "protocol",
+      header: "Protocolo & Versão",
+      width: "155px",
+      render: (c) => (
         <div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "4px" }}>
-            {blocks.map((b, idx) => (
-              <span
-                key={b?.id ?? idx}
-                style={{
-                  fontSize: "10px",
-                  padding: "2px 7px",
-                  borderRadius: "6px",
-                  backgroundColor: "#202020",
-                  border: "1px solid #353535",
-                  color: "#e5e2e1",
-                  fontFamily: "monospace",
-                }}
-              >
-                {idx + 1}. {b?.code}
-              </span>
-            ))}
+          <strong style={{ color: "#8ab4f8" }}>{c.surveyProtocolTse}</strong>
+          <div style={{ fontSize: "11px", color: "#9aa0a6", fontFamily: "monospace" }}>
+            Caderno {c.compositionVersion}
           </div>
+        </div>
+      ),
+    },
+    {
+      key: "surveyTitle",
+      header: "Pesquisa TSE Destino",
+      render: (c) => (
+        <div>
+          <div style={{ fontWeight: 600, color: "#e5e2e1" }}>{c.surveyTitle}</div>
           <div style={{ fontSize: "11px", color: "#9aa0a6" }}>
-            {blocks.length} questionário(s) • {totalQ} perguntas • ~{totalSec}s duração
+            Cargo: {c.office} • {c.cityUf}
           </div>
         </div>
-      );
+      ),
     },
-  },
-  {
-    key: "status",
-    header: "Status & Hash",
-    width: "175px",
-    render: (c) => {
-      const b = COMPOSITION_BADGES[c.status];
-      return (
-        <div>
-          <span
-            style={{
-              padding: "3px 9px",
-              borderRadius: "9999px",
-              fontSize: "11px",
-              fontWeight: 600,
-              backgroundColor: b.bg,
-              color: b.text,
-              border: `1px solid ${b.border}`,
-              display: "inline-block",
-            }}
-          >
-            {b.label}
-          </span>
-          <div style={{ fontSize: "10px", color: "#9aa0a6", fontFamily: "monospace", marginTop: "4px" }}>
-            {c.sha256Signature.slice(0, 18)}
+    {
+      key: "questionnaires",
+      header: "Questionários Juntados na Pesquisa (Ordem de Aplicação)",
+      render: (c) => {
+        const blocks = c.questionnaireIds
+          .map(
+            (id) =>
+              questionnaires.find((q) => q.id === id) ??
+              QUESTIONNAIRE_TEMPLATES.find((t) => t.id === id)
+          )
+          .filter((b): b is QuestionnaireOption => Boolean(b));
+        const totalQ = blocks.reduce((acc, b) => acc + b.questionsCount, 0);
+        const totalSec = blocks.reduce(
+          (acc, b) => acc + (b.estimatedSeconds ?? b.questionsCount * 20),
+          0
+        );
+        return (
+          <div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "4px" }}>
+              {blocks.map((b, idx) => (
+                <span
+                  key={b.id}
+                  style={{
+                    fontSize: "10px",
+                    padding: "2px 7px",
+                    borderRadius: "6px",
+                    backgroundColor: "#202020",
+                    border: "1px solid #353535",
+                    color: "#e5e2e1",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {idx + 1}. {b.code}
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize: "11px", color: "#9aa0a6" }}>
+              {blocks.length} questionário(s) • {totalQ} perguntas • ~{totalSec}s duração
+            </div>
           </div>
-        </div>
-      );
+        );
+      },
     },
-  },
-];
+    {
+      key: "status",
+      header: "Status & Hash",
+      width: "175px",
+      render: (c) => {
+        const b = COMPOSITION_BADGES[c.status];
+        return (
+          <div>
+            <span
+              style={{
+                padding: "3px 9px",
+                borderRadius: "9999px",
+                fontSize: "11px",
+                fontWeight: 600,
+                backgroundColor: b.bg,
+                color: b.text,
+                border: `1px solid ${b.border}`,
+                display: "inline-block",
+              }}
+            >
+              {b.label}
+            </span>
+            <div style={{ fontSize: "10px", color: "#9aa0a6", fontFamily: "monospace", marginTop: "4px" }}>
+              {c.sha256Signature.slice(0, 18)}
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+}
+
+export const COMPOSITION_COLUMNS: readonly WorkspaceColumn<SurveyCompositionRecord>[] =
+  getCompositionColumns();

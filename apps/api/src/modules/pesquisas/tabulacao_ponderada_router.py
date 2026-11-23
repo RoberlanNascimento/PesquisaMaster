@@ -1,28 +1,110 @@
 """Rotas HTTP para Ponderação por Raking (IPF) + Trimming + Deff de Kish e Tabulação Ponderada no BD."""
 
-from dataclasses import asdict
+from collections import defaultdict
+from dataclasses import asdict, dataclass
 import json
+import math
 from typing import Any
 
-import numpy as np
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.analytics.raking_engine import (
-    DiagnosticoPonderacao,
-    MAPA_DIMENSAO_COLUNA,
-    NORMALIZACAO_VALORES,
-    executar_raking_ipf,
-)
 
 tabulacao_ponderada_router = APIRouter(
     prefix="/api/v1/tabulacao-ponderada",
     tags=["Ponderação Raking (IPF) & Tabulação Ponderada"],
 )
+
+MAPA_DIMENSAO_COLUNA = {
+    "Sexo": "sexo",
+    "Faixa Etária": "faixa_etaria",
+    "Escolaridade (Grau de Instrução)": "escolaridade",
+    "Grau de Instrução": "escolaridade",
+    "Nível Econômico / Renda Familiar": "faixa_renda",
+    "Faixa de Renda Familiar": "faixa_renda",
+    "Religião / Matriz Religiosa": "religiao",
+    "Religião": "religiao",
+}
+
+NORMALIZACAO_VALORES = {
+    "sexo": {"M": "Masculino", "F": "Feminino"},
+}
+
+
+@dataclass
+class DiagnosticoPonderacao:
+    id_pesquisa: int
+    n_bruto_aprovado: int
+    n_efetivo_kish: float
+    deff_kish: float
+    margem_erro_nominal_pp: float
+    margem_erro_real_ponderada_pp: float
+    peso_minimo: float
+    peso_maximo: float
+    peso_medio: float
+    iteracoes_executadas: int
+    convergiu: bool
+    dimensoes_ponderadas: list[str]
+
+
+def _executar_raking_ipf_puro(
+    rows: list[dict[str, Any]],
+    metas_por_coluna: dict[str, dict[str, float]],
+    min_weight: float = 0.30,
+    max_weight: float = 3.00,
+    tol: float = 1e-6,
+    max_iter: int = 100,
+) -> tuple[list[float], int, bool]:
+    """Iterative Proportional Fitting (Raking) com Weight Trimming e renormalização em Python puro."""
+    n = len(rows)
+    if n == 0:
+        raise ValueError("Nenhuma entrevista aprovada encontrada para ponderação.")
+
+    pesos = [1.0] * n
+    convergiu = False
+    iteracoes = 0
+
+    for it in range(1, max_iter + 1):
+        iteracoes = it
+        pesos_anteriores = pesos.copy()
+
+        for col, metas_cat in metas_por_coluna.items():
+            cats_presentes = {r.get(col) for r in rows if r.get(col) is not None}
+            metas_ativas = {k: v for k, v in metas_cat.items() if k in cats_presentes and v > 0}
+            soma_metas = sum(metas_ativas.values())
+            if soma_metas <= 0:
+                continue
+
+            total_peso_atual = sum(pesos)
+            for cat, prop_alvo in metas_ativas.items():
+                prop_norm = prop_alvo / soma_metas
+                indices = [i for i, r in enumerate(rows) if r.get(col) == cat]
+                peso_atual_cat = sum(pesos[i] for i in indices)
+                if peso_atual_cat > 0:
+                    fator = (prop_norm * total_peso_atual) / peso_atual_cat
+                    for i in indices:
+                        pesos[i] *= fator
+
+            # Weight Trimming + renormalização para soma = n
+            pesos = [min(max(w, min_weight), max_weight) for w in pesos]
+            soma_w = sum(pesos)
+            if soma_w > 0:
+                escala = n / soma_w
+                pesos = [w * escala for w in pesos]
+
+        max_diff = max(abs(a - b) for a, b in zip(pesos, pesos_anteriores))
+        if max_diff < tol:
+            convergiu = True
+            break
+
+    soma_final = sum(pesos)
+    if soma_final > 0:
+        escala = n / soma_final
+        pesos = [round(w * escala, 6) for w in pesos]
+    return pesos, iteracoes, convergiu
 
 
 class RakingRequest(BaseModel):
@@ -43,7 +125,6 @@ async def executar_ponderacao_raking(
     payload: RakingRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    # 1. Valida estado da pesquisa e recupera plano amostral
     pesq_res = await session.execute(
         text(
             """
@@ -71,7 +152,6 @@ async def executar_ponderacao_raking(
             detail=f"Pesquisa ID {id_pesquisa} não possui plano amostral vinculado.",
         )
 
-    # 2. Extrai entrevistas aprovadas com dados demográficos de public.pessoas
     ent_res = await session.execute(
         text(
             """
@@ -98,12 +178,11 @@ async def executar_ponderacao_raking(
             detail=f"Nenhuma entrevista com status_auditoria = 'aprovada' na pesquisa ID {id_pesquisa}.",
         )
 
-    df = pd.DataFrame(rows_entrevistas)
-    for col, mapa in NORMALIZACAO_VALORES.items():
-        if col in df.columns:
-            df[col] = df[col].replace(mapa)
+    for row in rows_entrevistas:
+        for col, mapa in NORMALIZACAO_VALORES.items():
+            if col in row and row[col] in mapa:
+                row[col] = mapa[row[col]]
 
-    # 3. Extrai metas marginais da Matriz de Cotas
     cotas_res = await session.execute(
         text(
             """
@@ -126,27 +205,30 @@ async def executar_ponderacao_raking(
             detail=f"Matriz de Cotas vazia para a amostra ID {pesq['id_amostra']}.",
         )
 
-    df_cotas = pd.DataFrame(rows_cotas)
+    grupos_cotas: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows_cotas:
+        grupos_cotas[str(r["nome_dimensao"])].append(r)
+
     metas_por_coluna: dict[str, dict[str, float]] = {}
     dimensoes_usadas: list[str] = []
+    colunas_entrevista = set(rows_entrevistas[0].keys())
 
-    for nome_dim, grupo in df_cotas.groupby("nome_dimensao"):
-        nome_dim_str = str(nome_dim)
-        if payload.dimensoes_alvo and nome_dim_str not in payload.dimensoes_alvo:
+    for nome_dim, grupo in grupos_cotas.items():
+        if payload.dimensoes_alvo and nome_dim not in payload.dimensoes_alvo:
             continue
-        col_pessoa = MAPA_DIMENSAO_COLUNA.get(nome_dim_str)
-        if not col_pessoa or col_pessoa not in df.columns:
+        col_pessoa = MAPA_DIMENSAO_COLUNA.get(nome_dim)
+        if not col_pessoa or col_pessoa not in colunas_entrevista:
             continue
 
-        total_dim = float(grupo["meta_total_cat"].sum())
+        total_dim = sum(float(r["meta_total_cat"] or 0.0) for r in grupo)
         if total_dim <= 0:
             continue
 
         metas_por_coluna[col_pessoa] = {
-            str(row["categoria"]): float(row["meta_total_cat"]) / total_dim
-            for _, row in grupo.iterrows()
+            str(r["categoria"]): float(r["meta_total_cat"] or 0.0) / total_dim
+            for r in grupo
         }
-        dimensoes_usadas.append(nome_dim_str)
+        dimensoes_usadas.append(nome_dim)
 
     if not metas_por_coluna:
         raise HTTPException(
@@ -154,10 +236,9 @@ async def executar_ponderacao_raking(
             detail="Nenhuma dimensão compatível encontrada entre amostras_dimensao e public.pessoas.",
         )
 
-    # 4. Executa Raking (IPF) com Trimming
     try:
-        pesos, iteracoes, convergiu = executar_raking_ipf(
-            df=df,
+        pesos, iteracoes, convergiu = _executar_raking_ipf_puro(
+            rows=rows_entrevistas,
             metas_por_coluna=metas_por_coluna,
             min_weight=payload.min_weight,
             max_weight=payload.max_weight,
@@ -165,19 +246,17 @@ async def executar_ponderacao_raking(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # 5. Métricas de Kish (n_efetivo, DEFF e Margem de Erro Real)
     n_bruto = len(pesos)
-    soma_w = float(np.sum(pesos))
-    soma_w2 = float(np.sum(pesos ** 2))
-    n_efetivo = (soma_w ** 2) / soma_w2
-    deff = n_bruto / n_efetivo
+    soma_w = sum(pesos)
+    soma_w2 = sum(w * w for w in pesos)
+    n_efetivo = (soma_w ** 2) / soma_w2 if soma_w2 > 0 else 0.0
+    deff = (n_bruto / n_efetivo) if n_efetivo > 0 else 1.0
     z_score = float(pesq["z_score"])
-    erro_real_pp = round(z_score * float(np.sqrt(0.25 / n_efetivo)) * 100.0, 2)
+    erro_real_pp = round(z_score * math.sqrt(0.25 / n_efetivo) * 100.0, 2) if n_efetivo > 0 else float(pesq["margem_erro"])
 
-    # 6. Grava peso_amostral em lote
     payload_update = [
-        {"id_qp": int(id_qp), "peso": float(w)}
-        for id_qp, w in zip(df["id_questionario_pessoa"].tolist(), pesos.tolist())
+        {"id_qp": int(r["id_questionario_pessoa"]), "peso": float(w)}
+        for r, w in zip(rows_entrevistas, pesos)
     ]
     await session.execute(
         text(
@@ -190,7 +269,6 @@ async def executar_ponderacao_raking(
         payload_update,
     )
 
-    # 7. Atualiza cubo analítico materializado (se existir no BD)
     try:
         async with session.begin_nested():
             await session.execute(text("SELECT public.fn_atualizar_cubo_analitico()"))
@@ -204,15 +282,14 @@ async def executar_ponderacao_raking(
         deff_kish=round(deff, 4),
         margem_erro_nominal_pp=float(pesq["margem_erro"]),
         margem_erro_real_ponderada_pp=erro_real_pp,
-        peso_minimo=float(np.min(pesos)),
-        peso_maximo=float(np.max(pesos)),
-        peso_medio=round(float(np.mean(pesos)), 6),
+        peso_minimo=min(pesos),
+        peso_maximo=max(pesos),
+        peso_medio=round(soma_w / n_bruto, 6),
         iteracoes_executadas=iteracoes,
         convergiu=convergiu,
         dimensoes_ponderadas=dimensoes_usadas,
     )
 
-    # 8. Persiste diagnóstico em public.relatorios_tabulacao
     if payload.salvar_relatorio_diagnostico:
         uid = payload.id_usuario
         if uid is None:
@@ -273,7 +350,6 @@ async def obter_tabulacao_ponderada(
     if not pesq:
         raise HTTPException(status_code=404, detail=f"Pesquisa ID {id_pesquisa} não encontrada.")
 
-    # Estatísticas ao vivo dos pesos em questionarios_pessoas
     kish_res = await session.execute(
         text(
             """
@@ -298,9 +374,8 @@ async def obter_tabulacao_ponderada(
     n_efetivo = (soma_w ** 2) / soma_w2 if soma_w2 > 0 else 0.0
     deff = (n_bruto / n_efetivo) if n_efetivo > 0 else 1.0
     z_score = float(pesq["z_score"] or 1.96)
-    erro_real_pp = round(z_score * float(np.sqrt(0.25 / n_efetivo)) * 100.0, 2) if n_efetivo > 0 else float(pesq["margem_erro"] or 0.0)
+    erro_real_pp = round(z_score * math.sqrt(0.25 / n_efetivo) * 100.0, 2) if n_efetivo > 0 else float(pesq["margem_erro"] or 0.0)
 
-    # Último diagnóstico salvo em relatorios_tabulacao
     diag_res = await session.execute(
         text(
             """
@@ -316,7 +391,6 @@ async def obter_tabulacao_ponderada(
     )
     diag_row = diag_res.mappings().first()
 
-    # Votos diretos ponderados por cenário e candidato
     votos_res = await session.execute(
         text(
             """
@@ -347,7 +421,6 @@ async def obter_tabulacao_ponderada(
     )
     votos_rows = [dict(r) for r in votos_res.mappings().all()]
 
-    # Rejeição ponderada
     rej_res = await session.execute(
         text(
             """
@@ -373,7 +446,6 @@ async def obter_tabulacao_ponderada(
     }
     total_rej_base = soma_w if soma_w > 0 else 1.0
 
-    # Agrupa por cenário e calcula % bruto, % ponderado e % votos válidos
     cenarios_map: dict[int, dict[str, Any]] = {}
     for row in votos_rows:
         cid = int(row["id_cenario"])
@@ -423,7 +495,6 @@ async def obter_tabulacao_ponderada(
             }
         )
 
-    # Crosstab ponderado pela dimensão solicitada
     col_segura = dimensao_crosstab if dimensao_crosstab in ("sexo", "faixa_etaria", "escolaridade", "faixa_renda", "religiao") else "sexo"
     cross_res = await session.execute(
         text(

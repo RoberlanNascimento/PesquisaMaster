@@ -14,6 +14,7 @@ import { ScalesCatalogFeature } from "../../features/catalog/ScalesCatalogFeatur
 import { AnswerOptionsCatalogFeature } from "../../features/catalog/AnswerOptionsCatalogFeature";
 import { BatteryItemsCatalogFeature } from "../../features/catalog/BatteryItemsCatalogFeature";
 import { ScenarioCandidatesFeature } from "../../features/surveys/ScenarioCandidatesFeature";
+import { SurveyAppPreviewFeature } from "../../features/surveys/SurveyAppPreviewFeature";
 import { FieldDistributionFeature } from "../../features/fieldwork/FieldDistributionFeature";
 import { FieldTransferFeature } from "../../features/fieldwork/FieldTransferFeature";
 import { FieldHomologationFeature } from "../../features/supervision/FieldHomologationFeature";
@@ -62,6 +63,9 @@ export function WorkspaceTabResolver({ activeTab }: WorkspaceTabResolverProps): 
 
     case "survey-scenario-candidates":
       return <ScenarioCandidatesFeature />;
+
+    case "survey-app-preview":
+      return <SurveyAppPreviewFeature />;
 
     case "survey-candidate-disc":
     case "catalog-candidates":

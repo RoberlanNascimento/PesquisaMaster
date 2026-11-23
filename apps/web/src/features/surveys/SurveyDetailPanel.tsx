@@ -261,6 +261,7 @@ export function SurveyDetailPanel({
           </h2>
           <div style={{ fontSize: "12px", color: colors.textMuted, marginTop: "4px" }}>
             Período: {survey.fieldStartDate} a {survey.fieldEndDate} • {survey.statisticianName}
+            {survey.createdByName ? ` • Criado por ${survey.createdByName}` : ""}
           </div>
         </div>
 
