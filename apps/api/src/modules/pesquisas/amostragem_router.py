@@ -101,7 +101,8 @@ async def get_amostragem_opcoes(
     muns = await session.execute(
         text(
             """
-            SELECT m.id_municipio, m.nome, e.sigla AS uf,
+            SELECT m.id_municipio, m.codigo_ibge, m.codigo_tse, m.nome, e.sigla AS uf,
+                   COALESCE(m.populacao_total, 0) AS populacao_total,
                    COALESCE(m.eleitorado_total, 0) AS eleitorado_total
             FROM municipios m
             JOIN estados e ON e.id_estado = m.id_estado
@@ -168,6 +169,30 @@ async def get_amostragem_opcoes(
         "eleitorados_tse": [dict(r) for r in eleitorados_tse.mappings().all()],
         "usuarios": [dict(r) for r in usuarios.mappings().all()],
     }
+
+
+@amostragem_router.get("/municipios")
+async def list_municipios_db(
+    somente_com_eleitorado: bool = True,
+    session: AsyncSession = Depends(get_db_session),
+) -> list[dict[str, Any]]:
+    where_sql = "WHERE COALESCE(m.eleitorado_total, 0) > 0" if somente_com_eleitorado else ""
+    res = await session.execute(
+        text(
+            f"""
+            SELECT m.id_municipio, m.codigo_ibge, m.codigo_tse, m.nome,
+                   m.id_estado, e.sigla AS uf, e.nome AS estado_nome,
+                   COALESCE(m.populacao_total, 0) AS populacao_total,
+                   COALESCE(m.eleitorado_total, 0) AS eleitorado_total,
+                   (SELECT COUNT(*) FROM regiao_zonas rz WHERE rz.id_municipio = m.id_municipio) AS regioes_count
+            FROM municipios m
+            JOIN estados e ON e.id_estado = m.id_estado
+            {where_sql}
+            ORDER BY COALESCE(m.eleitorado_total, 0) DESC, m.nome ASC
+            """
+        )
+    )
+    return [dict(r) for r in res.mappings().all()]
 
 
 @amostragem_router.post("/amostras", status_code=status.HTTP_201_CREATED)
