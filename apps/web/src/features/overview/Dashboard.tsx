@@ -34,6 +34,7 @@ export function Dashboard(): React.JSX.Element {
     const votosAll = Array.isArray(dbStats.resultados_votos) ? dbStats.resultados_votos : [];
     const rejeicaoAll = Array.isArray(dbStats.rejeicao_votos) ? dbStats.rejeicao_votos : [];
     const relatoriosAll = Array.isArray(dbStats.relatorios) ? dbStats.relatorios : [];
+    const perguntasAll = Array.isArray(dbStats.perguntas) ? dbStats.perguntas : [];
 
     const PALETTE = ["#8ab4f8", "#81c995", "#fde293", "#f28b82", "#c58af9", "#78d9ec", "#94a3b8"];
 
@@ -121,6 +122,26 @@ export function Dashboard(): React.JSX.Element {
       const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`);
       const sampleCount = stimulatedPoints.reduce((acc, pt) => acc + pt.quantity, 0);
 
+      const pergsPesq = perguntasAll.filter((pg: any) => pg.id_pesquisa === p.id_pesquisa);
+      const pergsPool = pergsPesq.length > 0 ? pergsPesq : perguntasAll;
+      const findQuestion = (regex: RegExp): string | undefined =>
+        pergsPool.find((pg: any) => regex.test(String(pg.enunciado ?? "")))?.enunciado;
+
+      const spontaneousTitle =
+        findQuestion(/n[ãa]o ler op[çc][õo]es|espont[âa]n/i) ??
+        findQuestion(/em quem voc[êe] votaria/i);
+      const stimulatedTitle =
+        findQuestion(/disco|em qual destes candidatos/i) ??
+        findQuestion(/candidatos fossem estes/i);
+      const scenarioQuestionTitle =
+        findQuestion(/candidatos fossem estes/i) ?? stimulatedTitle;
+      const rejectionTitle = findQuestion(/n[ãa]o votaria/i);
+
+      const scenariosWithQuestion: ScenarioDataset[] = scenarios.map((sc) => ({
+        ...sc,
+        scenarioTitle: scenarioQuestionTitle ?? sc.scenarioTitle,
+      }));
+
       return {
         id: String(p.id_pesquisa),
         protocolTse: p.numero_registro_tse || `PESQ-${p.id_pesquisa}`,
@@ -132,9 +153,12 @@ export function Dashboard(): React.JSX.Element {
           {
             officeCode: "PREFEITO",
             officeLabel: `Prefeito — ${p.municipio_nome || "Município"}/${p.uf || ""}`,
+            spontaneousTitle,
+            stimulatedTitle,
+            rejectionTitle,
             spontaneous: spontaneousPoints,
             stimulated: stimulatedPoints,
-            scenarios,
+            scenarios: scenariosWithQuestion,
             rejection: rejectionPoints,
             citations: stimulatedPoints,
           },

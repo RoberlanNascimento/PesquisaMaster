@@ -17,6 +17,9 @@ export interface ScenarioDataset {
 export interface OfficeResearchReport {
   readonly officeCode: string;
   readonly officeLabel: string;
+  readonly spontaneousTitle?: string;
+  readonly stimulatedTitle?: string;
+  readonly rejectionTitle?: string;
   readonly spontaneous: readonly CandidateStatPoint[];
   readonly stimulated: readonly CandidateStatPoint[];
   readonly scenarios: readonly ScenarioDataset[];

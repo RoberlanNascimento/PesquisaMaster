@@ -210,29 +210,29 @@ export function OfficeSectionCard({
       >
         <HorizontalBarChart
           testId={`chart-spontaneous-${office.officeCode}`}
-          title="1. Pesquisa Espontânea"
-          subtitle="Intenção de voto sem apresentação do disco eleitoral"
+          title={office.spontaneousTitle || "1. Pesquisa Espontânea"}
+          subtitle="1. Pesquisa Espontânea — Intenção de voto sem apresentação do disco eleitoral"
           points={office.spontaneous}
         />
         <HorizontalBarChart
           testId={`chart-stimulated-${office.officeCode}`}
-          title="2. Pesquisa Estimulada"
-          subtitle="Intenção de voto com rodízio determinístico do disco TSE"
+          title={office.stimulatedTitle || "2. Pesquisa Estimulada"}
+          subtitle="2. Pesquisa Estimulada — Intenção de voto com rodízio determinístico do disco TSE"
           points={office.stimulated}
         />
         {office.scenarios.map((scen) => (
           <HorizontalBarChart
             key={scen.scenarioId}
             testId={`chart-scenario-${office.officeCode}-${scen.scenarioId}`}
-            title={`3. ${scen.scenarioTitle}`}
-            subtitle="Simulação direta de confrontos eleitorais"
+            title={scen.scenarioTitle}
+            subtitle="3. Cenário de Confronto — Simulação direta de confrontos eleitorais"
             points={scen.points}
           />
         ))}
         <HorizontalBarChart
           testId={`chart-rejection-${office.officeCode}`}
-          title="4. Rejeição Eleitoral"
-          subtitle="Eleitores que declararam não votar de jeito nenhum no candidato"
+          title={office.rejectionTitle || "4. Rejeição Eleitoral"}
+          subtitle="4. Rejeição Eleitoral — Eleitores que declararam não votar de jeito nenhum no candidato"
           points={office.rejection}
         />
       </div>

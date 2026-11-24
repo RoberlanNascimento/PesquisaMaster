@@ -131,6 +131,21 @@ async def get_dashboard_stats(
             """
         )
     )
+    perg_res = await session.execute(
+        text(
+            """
+            SELECT q.id_pesquisa,
+                   qp.id_questionario,
+                   qp.id_pergunta,
+                   qp.ordem,
+                   p.enunciado
+            FROM questionario_perguntas qp
+            JOIN questionarios q ON q.id_questionario = qp.id_questionario
+            JOIN perguntas p ON p.id_pergunta = qp.id_pergunta
+            ORDER BY q.id_pesquisa ASC, qp.ordem ASC
+            """
+        )
+    )
 
     return {
         "total_pesquisas": int(row.get("total_pesquisas") or 0),
@@ -142,6 +157,7 @@ async def get_dashboard_stats(
         "resultados_votos": [dict(r) for r in votos_res.mappings().all()],
         "rejeicao_votos": [dict(r) for r in rejeicao_res.mappings().all()],
         "relatorios": [dict(r) for r in rel_res.mappings().all()],
+        "perguntas": [dict(r) for r in perg_res.mappings().all()],
     }
 
 
