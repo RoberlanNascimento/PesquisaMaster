@@ -5,11 +5,12 @@
 
 import asyncio
 import base64
+import hashlib
 import json
 from typing import Any
 from urllib.request import Request, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -222,17 +223,18 @@ async def get_questionarios_resumo(
 
     candidatos_list = [dict(r) for r in candidatos]
     cc_list = [dict(r) for r in cenario_candidatos]
-    gcs = get_gcs_service()
-    if gcs.is_configured:
-        for row in candidatos_list:
-            for col in ("foto_url", "imagem_url", "url_foto"):
-                val = row.get(col)
-                if isinstance(val, str) and val.strip():
-                    row[col] = gcs.get_signed_url(val)
-        for row in cc_list:
-            val = row.get("foto_url")
-            if isinstance(val, str) and val.strip():
-                row["foto_url"] = gcs.get_signed_url(val)
+    for row in candidatos_list:
+        cid = row.get("id_candidato_produto")
+        val = row.get("foto_url") or row.get("imagem_url") or row.get("url_foto")
+        if cid and isinstance(val, str) and val.strip():
+            ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
+            row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
+    for row in cc_list:
+        cid = row.get("id_candidato_produto")
+        val = row.get("foto_url")
+        if cid and isinstance(val, str) and val.strip():
+            ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
+            row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
 
     return {
         "pesquisas": [dict(r) for r in pesquisas],
@@ -815,14 +817,40 @@ async def list_candidatos_produtos(
         )
     )
     rows = [dict(r) for r in res.mappings().all()]
-    gcs = get_gcs_service()
-    if gcs.is_configured:
-        for row in rows:
-            for col in ("foto_url", "imagem_url", "url_foto"):
-                val = row.get(col)
-                if isinstance(val, str) and val.strip():
-                    row[col] = gcs.get_signed_url(val)
+    for row in rows:
+        cid = row.get("id_candidato_produto")
+        val = row.get("foto_url") or row.get("imagem_url") or row.get("url_foto")
+        if cid and isinstance(val, str) and val.strip():
+            ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
+            row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
     return rows
+
+
+@questionarios_db_router.get("/candidatos/{id_candidato_produto}/foto")
+async def get_candidato_foto(
+    id_candidato_produto: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    res = await session.execute(
+        text(
+            "SELECT foto_url FROM public.candidatos_produtos WHERE id_candidato_produto = :id"
+        ),
+        {"id": id_candidato_produto},
+    )
+    foto_url = res.scalar_one_or_none()
+    if not foto_url or not isinstance(foto_url, str):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada.")
+
+    gcs = get_gcs_service()
+    downloaded = gcs.download_file(foto_url)
+    if downloaded is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo de foto não encontrado no GCS.")
+    data, content_type = downloaded
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @questionarios_db_router.post("/candidatos", status_code=status.HTTP_201_CREATED)
@@ -1013,7 +1041,12 @@ async def upload_candidato_foto(
             if old_url and isinstance(old_url, str) and old_url != foto_url:
                 gcs.delete_file(old_url)
 
-    display_url = gcs.get_signed_url(foto_url) or foto_url
+    ver = hashlib.md5(foto_url.encode("utf-8")).hexdigest()[:8]
+    display_url = (
+        f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{id_candidato_produto}/foto?v={ver}"
+        if id_candidato_produto is not None
+        else (gcs.get_signed_url(foto_url) or foto_url)
+    )
     return {"foto_url": display_url, "canonical_url": foto_url, "id_candidato_produto": id_candidato_produto}
 
 

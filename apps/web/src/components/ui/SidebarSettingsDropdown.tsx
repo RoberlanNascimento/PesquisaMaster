@@ -39,7 +39,6 @@ const SETTINGS_DROPDOWN_TABS: readonly ActiveTab[] = [
   "catalog-battery-items",
   "catalog-scales",
   "catalog-answer-options",
-  "audit-reassignment",
   "security-audit",
   "settings",
 ];

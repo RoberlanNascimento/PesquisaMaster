@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Google Cloud Storage (GCS)
     gcs_project_id: str | None = "Pesquisas"
-    gcs_bucket_name: str | None = "psequisas_candidatos"
+    gcs_bucket_name: str | None = "pesquisas_candidatos"
     gcs_credentials_path: str | None = None
     google_application_credentials: str | None = None
     gcs_signed_url_expiration_minutes: int = 60

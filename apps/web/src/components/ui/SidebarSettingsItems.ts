@@ -115,13 +115,6 @@ export const CATALOG_DROPDOWN_ITEMS: readonly NavItemConfig[] = [
 
 export const AUDIT_DROPDOWN_ITEMS: readonly NavItemConfig[] = [
   {
-    id: "audit-reassignment",
-    path: "/auditoria/reatribuicao",
-    label: "Reatribuição de Entrevistas",
-    subtitle: "Historico_Reatribuicao_Questionarios",
-    icon: "🔄",
-  },
-  {
     id: "security-audit",
     path: "/auditoria/desbloqueios",
     label: "Desbloqueios Master",

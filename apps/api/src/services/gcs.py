@@ -10,6 +10,7 @@ from datetime import timedelta
 from functools import lru_cache
 import logging
 import os
+from pathlib import Path
 from typing import Any, BinaryIO
 import uuid
 
@@ -39,14 +40,21 @@ class GCSService:
             bucket_name
             or settings.gcs_bucket_name
             or os.getenv("GCS_BUCKET_NAME")
-            or "psequisas_candidatos"
+            or "pesquisas_candidatos"
         )
-        self.credentials_path = (
+        default_json = Path(__file__).resolve().parents[4] / "credenciais-pesquisas.json"
+        raw_creds = (
             credentials_path
             or settings.gcs_credentials_path
             or settings.google_application_credentials
             or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         )
+        if raw_creds and os.path.exists(raw_creds):
+            self.credentials_path: str | None = raw_creds
+        elif default_json.exists():
+            self.credentials_path = str(default_json)
+        else:
+            self.credentials_path = raw_creds
         self.signed_url_expiration_minutes = (
             signed_url_expiration_minutes or settings.gcs_signed_url_expiration_minutes
         )
@@ -183,6 +191,25 @@ class GCSService:
         except Exception as exc:
             logger.error("Falha ao remover arquivo do GCS: %s", exc, exc_info=True)
             return False
+
+    def download_file(self, file_url_or_path: str | None) -> tuple[bytes, str] | None:
+        """Baixa os bytes e o content_type de um objeto do bucket GCS."""
+        if not file_url_or_path:
+            return None
+        try:
+            blob_path = self._extract_blob_path(file_url_or_path)
+            if not blob_path:
+                return None
+            bucket = self._get_bucket()
+            blob = bucket.blob(blob_path)
+            if not blob.exists():
+                return None
+            data = blob.download_as_bytes()
+            content_type = blob.content_type or "image/jpeg"
+            return data, content_type
+        except Exception as exc:
+            logger.warning("Falha ao baixar arquivo do GCS (%s): %s", file_url_or_path, exc)
+            return None
 
     def get_signed_url(
         self,

@@ -235,7 +235,7 @@ async def create_reatribuicao(
 
     qp_res = await session.execute(
         text(
-            "SELECT id_questionario_pessoa, id_pesquisador FROM questionarios_pessoas "
+            "SELECT id_questionario_pessoa, id_pesquisa, id_pesquisador, id_organizacao FROM questionarios_pessoas "
             "WHERE id_questionario_pessoa = :id_qp"
         ),
         {"id_qp": payload.id_questionario_pessoa},
@@ -268,6 +268,17 @@ async def create_reatribuicao(
         u_res = await session.execute(text("SELECT id_usuario FROM usuarios ORDER BY id_usuario ASC LIMIT 1"))
         resolved_user_id = u_res.scalar_one_or_none() or 1
 
+    # Define contexto multi-tenant e usuário na transação atual antes do UPDATE (exigido pelo trigger/RLS)
+    tenant_id = int(qp_row.get("id_organizacao") or 1)
+    await session.execute(
+        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+        {"tid": str(tenant_id)},
+    )
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(resolved_user_id)},
+    )
+
     # Atualiza questionarios_pessoas — o trigger trg_auditar_troca_pesquisador grava no histórico
     await session.execute(
         text(
@@ -297,8 +308,153 @@ async def create_reatribuicao(
         {"uid": resolved_user_id, "motivo": motivo, "id_qp": payload.id_questionario_pessoa},
     )
     created = hist_res.mappings().first()
+
+    # Transfere TODO o saldo de entrevistas (meta_entrevistas) do pesquisador anterior para o novo pesquisador nesta pesquisa
+    id_pesquisa = qp_row.get("id_pesquisa")
+    if id_pesquisa is not None:
+        origem_res = await session.execute(
+            text(
+                """
+                SELECT id_atribuicao, id_bairro, lote_setor, meta_entrevistas, data_inicio, data_limite
+                FROM atribuicao_pesquisadores
+                WHERE id_pesquisa = :id_pesq
+                  AND id_profissional = :id_ant
+                  AND COALESCE(meta_entrevistas, 0) > 0
+                ORDER BY id_atribuicao ASC
+                """
+            ),
+            {"id_pesq": id_pesquisa, "id_ant": id_anterior},
+        )
+        origem_rows = origem_res.mappings().all()
+        total_transferido = sum(int(r["meta_entrevistas"] or 0) for r in origem_rows)
+
+        if total_transferido > 0:
+            # Zera o saldo do pesquisador anterior nesta pesquisa (preservando FKs de histórico/transferências)
+            await session.execute(
+                text(
+                    """
+                    UPDATE atribuicao_pesquisadores
+                    SET meta_entrevistas = 0
+                    WHERE id_pesquisa = :id_pesq
+                      AND id_profissional = :id_ant
+                      AND COALESCE(meta_entrevistas, 0) > 0
+                    """
+                ),
+                {"id_pesq": id_pesquisa, "id_ant": id_anterior},
+            )
+
+            # Credita todo o saldo ao novo pesquisador (atualiza atribuição existente ou cria uma nova)
+            dest_res = await session.execute(
+                text(
+                    """
+                    SELECT id_atribuicao
+                    FROM atribuicao_pesquisadores
+                    WHERE id_pesquisa = :id_pesq
+                      AND id_profissional = :id_novo
+                    ORDER BY id_atribuicao ASC
+                    LIMIT 1
+                    """
+                ),
+                {"id_pesq": id_pesquisa, "id_novo": payload.id_pesquisador_novo},
+            )
+            dest_row = dest_res.mappings().first()
+            if dest_row:
+                await session.execute(
+                    text(
+                        """
+                        UPDATE atribuicao_pesquisadores
+                        SET meta_entrevistas = COALESCE(meta_entrevistas, 0) + :qtd,
+                            status_atribuicao = 'ativa'
+                        WHERE id_atribuicao = :dest_id
+                        """
+                    ),
+                    {"qtd": total_transferido, "dest_id": dest_row["id_atribuicao"]},
+                )
+            else:
+                first_orig = origem_rows[0]
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO atribuicao_pesquisadores (
+                            id_pesquisa, id_profissional, id_bairro, lote_setor,
+                            meta_entrevistas, data_inicio, data_limite, status_atribuicao, id_organizacao
+                        ) VALUES (
+                            :id_pesq, :id_novo, :id_bairro, :lote_setor,
+                            :qtd, COALESCE(:data_inicio, CURRENT_DATE), COALESCE(:data_limite, CURRENT_DATE + 30), 'ativa', :tid
+                        )
+                        """
+                    ),
+                    {
+                        "id_pesq": id_pesquisa,
+                        "id_novo": payload.id_pesquisador_novo,
+                        "id_bairro": first_orig.get("id_bairro"),
+                        "lote_setor": first_orig.get("lote_setor") or "Lote Transferido",
+                        "qtd": total_transferido,
+                        "data_inicio": first_orig.get("data_inicio"),
+                        "data_limite": first_orig.get("data_limite"),
+                        "tid": tenant_id,
+                    },
+                )
+
     await session.commit()
     return dict(created or {})
+
+
+class ReatribuicaoUpdateSchema(BaseModel):
+    id_usuario_autorizador: int | None = None
+    motivo: str
+
+
+@tables_router.put(
+    "/historico-reatribuicoes/{id_historico}",
+    summary="Edita justificativa e autorizador de uma reatribuição",
+)
+async def update_reatribuicao(
+    id_historico: int,
+    payload: ReatribuicaoUpdateSchema,
+    session: DbSessionDep,
+) -> dict[str, Any]:
+    motivo = payload.motivo.strip()
+    if len(motivo) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Informe uma justificativa com pelo menos 3 caracteres.",
+        )
+    await session.execute(text("SELECT set_config('app.current_tenant_id', '1', true)"))
+    res = await session.execute(
+        text(
+            """
+            UPDATE historico_reatribuicao_questionarios
+            SET motivo = :motivo,
+                id_usuario_autorizador = COALESCE(:uid, id_usuario_autorizador)
+            WHERE id_historico_reatribuicao = :id_h
+            RETURNING *
+            """
+        ),
+        {"id_h": id_historico, "motivo": motivo, "uid": payload.id_usuario_autorizador},
+    )
+    row = res.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de reatribuição não encontrado.")
+    await session.commit()
+    return dict(row)
+
+
+@tables_router.delete(
+    "/historico-reatribuicoes/{id_historico}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove um registro de histórico de reatribuição",
+)
+async def delete_reatribuicao(
+    id_historico: int,
+    session: DbSessionDep,
+) -> None:
+    await session.execute(text("SELECT set_config('app.current_tenant_id', '1', true)"))
+    await session.execute(
+        text("DELETE FROM historico_reatribuicao_questionarios WHERE id_historico_reatribuicao = :id_h"),
+        {"id_h": id_historico},
+    )
+    await session.commit()
 
 
 @tables_router.get("/dimensoes", summary="Lista variáveis de controle (amostras_dimensao)")

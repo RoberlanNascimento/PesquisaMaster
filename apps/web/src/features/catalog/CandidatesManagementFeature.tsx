@@ -524,7 +524,7 @@ export function CandidatesManagementFeature(): React.JSX.Element {
                 if (editingCandidate) {
                   void loadCandidates();
                 }
-                notifySuccess("Foto enviada ao Google Cloud Storage.");
+                notifySuccess("Foto enviada com sucesso!");
               }}
               onError={(msg) => setModalError(msg)}
             />

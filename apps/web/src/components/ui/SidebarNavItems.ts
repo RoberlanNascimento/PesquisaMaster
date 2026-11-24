@@ -118,6 +118,20 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
     path: "/distribuicao",
     label: "Distribuição",
     icon: "sampling",
+    subItems: [
+      {
+        id: "distribution",
+        path: "/distribuicao",
+        label: "Alocar Pesquisadores",
+        icon: "dot",
+      },
+      {
+        id: "audit-reassignment",
+        path: "/auditoria/reatribuicao",
+        label: "Realocar",
+        icon: "dot",
+      },
+    ],
   },
   {
     id: "fieldwork-group",

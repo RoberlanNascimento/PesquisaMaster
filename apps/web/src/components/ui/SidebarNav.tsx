@@ -67,6 +67,7 @@ export function SidebarNav(): React.JSX.Element {
   };
 
   const handleSubItemClick = (parentId: string, sub: NavItemConfig): void => {
+    setIsSettingsMenuOpen(false);
     setExpandedGroupId(parentId);
     if (!sub.subItems) {
       setExpandedSubGroupId(null);

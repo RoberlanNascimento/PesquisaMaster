@@ -33,6 +33,21 @@ export function Dashboard(): React.JSX.Element {
     const pesqs = Array.isArray(dbStats.pesquisas) ? dbStats.pesquisas : [];
     const votosAll = Array.isArray(dbStats.resultados_votos) ? dbStats.resultados_votos : [];
     const rejeicaoAll = Array.isArray(dbStats.rejeicao_votos) ? dbStats.rejeicao_votos : [];
+    const relatoriosAll = Array.isArray(dbStats.relatorios) ? dbStats.relatorios : [];
+
+    const PALETTE = ["#8ab4f8", "#81c995", "#fde293", "#f28b82", "#c58af9", "#78d9ec", "#94a3b8"];
+
+    const parseCrosstabRows = (items: any[]): any[] =>
+      items.map((item: any, idx: number) => {
+        const rawName = String(item.candidato ?? "Sem identificação");
+        const match = rawName.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        return {
+          candidato: match ? match[1].trim() : rawName,
+          partido: match ? match[2].trim() : "NS/NR",
+          votos: Number(item.votos) || 0,
+          cor_hex: PALETTE[idx % PALETTE.length],
+        };
+      });
 
     const toPoints = (rows: any[], prefix: string): CandidateStatPoint[] => {
       const total = rows.reduce((acc: number, v: any) => acc + (Number(v.votos) || 0), 0);
@@ -46,13 +61,16 @@ export function Dashboard(): React.JSX.Element {
           quantity: qtd,
           frequency: `${qtd}`,
           percentage: pct.toFixed(2),
-          color: v.cor_hex || (idx === 0 ? "#8ab4f8" : idx === 1 ? "#81c995" : "#94a3b8"),
+          color: v.cor_hex || PALETTE[idx % PALETTE.length],
         };
       });
     };
 
     return pesqs.map((p: any) => {
       const votosPesq = votosAll.filter((v: any) => v.id_pesquisa === p.id_pesquisa);
+      const relPesq = relatoriosAll.find((rel: any) => rel.id_pesquisa === p.id_pesquisa);
+      const crosstab = relPesq?.configuracao_crosstab ?? {};
+
       const scenMap = new Map<string, { title: string; tipo: string; rows: any[] }>();
       for (const v of votosPesq) {
         const key = String(v.id_cenario ?? "default");
@@ -63,6 +81,22 @@ export function Dashboard(): React.JSX.Element {
         };
         entry.rows.push(v);
         scenMap.set(key, entry);
+      }
+
+      if (scenMap.size === 0) {
+        const fallbackResults = Array.isArray(crosstab.resultados_cenario_2)
+          ? crosstab.resultados_cenario_2
+          : Array.isArray(crosstab.resultados)
+            ? crosstab.resultados
+            : [];
+        if (fallbackResults.length > 0) {
+          const parsed = parseCrosstabRows(fallbackResults);
+          scenMap.set("consolidado-1", {
+            title: relPesq?.titulo_relatorio || "Cenário Consolidado (TSE)",
+            tipo: "estimulado",
+            rows: parsed,
+          });
+        }
       }
 
       const scenariosList = Array.from(scenMap.entries());
@@ -77,7 +111,13 @@ export function Dashboard(): React.JSX.Element {
         points: toPoints(s.rows, `P${p.id_pesquisa}-S${scenId}`),
       }));
 
-      const rejRows = rejeicaoAll.filter((v: any) => v.id_pesquisa === p.id_pesquisa);
+      const rejRowsRaw = rejeicaoAll.filter((v: any) => v.id_pesquisa === p.id_pesquisa);
+      const rejRows =
+        rejRowsRaw.length > 0
+          ? rejRowsRaw
+          : Array.isArray(crosstab.rejeicao)
+            ? parseCrosstabRows(crosstab.rejeicao)
+            : [];
       const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`);
       const sampleCount = stimulatedPoints.reduce((acc, pt) => acc + pt.quantity, 0);
 
