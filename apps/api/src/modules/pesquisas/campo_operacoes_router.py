@@ -1,5 +1,6 @@
 """Rotas de Operações de Campo: Atribuições, Transferências, Reatribuições, Sessões e Logs."""
 
+import hashlib
 from datetime import date
 from typing import Any
 
@@ -412,4 +413,124 @@ async def list_logs_autenticacao(
         )
     )
     return [dict(r) for r in result.mappings().all()]
+
+
+@campo_operacoes_router.get("/apresentacao-dados/{id_pesquisa}")
+async def get_apresentacao_dados_pesquisa(
+    id_pesquisa: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Retorna exclusivamente os dados reais do PostgreSQL para o relatório de apresentação de uma pesquisa."""
+    pergs_res = await session.execute(
+        text(
+            """
+            SELECT qp.id_questionario_pergunta,
+                   qp.id_questionario,
+                   qp.id_pergunta,
+                   qp.id_cenario,
+                   qp.secao_bloco,
+                   cp.identificador AS cenario_nome,
+                   cp.tipo_cenario AS cenario_tipo,
+                   qp.ordem,
+                   p.enunciado,
+                   p.tipo_questao
+            FROM questionario_perguntas qp
+            JOIN questionarios q ON q.id_questionario = qp.id_questionario
+            JOIN perguntas p ON p.id_pergunta = qp.id_pergunta
+            LEFT JOIN cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
+            WHERE q.id_pesquisa = :pid
+            ORDER BY COALESCE(qp.id_cenario, 999999) ASC, qp.ordem ASC, qp.id_questionario_pergunta ASC
+            """
+        ),
+        {"pid": id_pesquisa},
+    )
+    perguntas = [dict(r) for r in pergs_res.mappings().all()]
+
+    resp_res = await session.execute(
+        text(
+            """
+            SELECT r.id_questionario_pergunta,
+                   r.id_cenario,
+                   r.id_item_bateria,
+                   ib.descricao_item AS item_bateria_nome,
+                   r.tipo_registro,
+                   r.valor_texto,
+                   r.id_candidato_produto,
+                   c.nome_urna_comercial AS candidato_nome,
+                   c.sigla_partido_marca AS partido,
+                   c.cor_hex,
+                   c.foto_url AS raw_foto_url,
+                   o.rotulo AS opcao_texto,
+                   r.codigo_especial,
+                   COUNT(*)::int AS votos
+            FROM respostas r
+            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            LEFT JOIN opcoes_resposta o ON o.id_opcao = r.id_opcao
+            LEFT JOIN perguntas_itens_bateria ib ON ib.id_item_bateria = r.id_item_bateria
+            WHERE qp.id_pesquisa = :pid
+            GROUP BY r.id_questionario_pergunta, r.id_cenario, r.id_item_bateria, ib.descricao_item,
+                     r.tipo_registro, r.valor_texto,
+                     r.id_candidato_produto, c.nome_urna_comercial, c.sigla_partido_marca,
+                     c.cor_hex, c.foto_url, o.rotulo, r.codigo_especial
+            ORDER BY r.id_questionario_pergunta ASC, r.id_cenario ASC NULLS LAST, r.id_item_bateria ASC NULLS LAST, votos DESC
+            """
+        ),
+        {"pid": id_pesquisa},
+    )
+    respostas = []
+    for row in resp_res.mappings().all():
+        item = dict(row)
+        raw_foto = item.pop("raw_foto_url", None)
+        cid = item.get("id_candidato_produto")
+        if cid and isinstance(raw_foto, str) and raw_foto.strip():
+            ver = hashlib.md5(raw_foto.encode("utf-8")).hexdigest()[:8]
+            item["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
+        else:
+            item["foto_url"] = None
+        respostas.append(item)
+
+    rel_res = await session.execute(
+        text(
+            """
+            SELECT id_relatorio, id_pesquisa, titulo_relatorio, configuracao_crosstab, criado_em
+            FROM relatorios_tabulacao
+            WHERE id_pesquisa = :pid
+            ORDER BY id_relatorio DESC
+            """
+        ),
+        {"pid": id_pesquisa},
+    )
+    relatorios = [dict(r) for r in rel_res.mappings().all()]
+
+    dim_res = await session.execute(
+        text(
+            """
+            SELECT d.id_amostra_dimensao,
+                   d.nome_dimensao,
+                   d.fonte_dados,
+                   d.ordem_exibicao,
+                   c.categoria,
+                   COALESCE(SUM(c.quantidade_meta), 0)::int AS quantidade_meta,
+                   COALESCE(SUM(c.quantidade_coletada), 0)::int AS quantidade_coletada,
+                   COALESCE(ROUND(AVG(c.percentual_meta)::numeric, 2), 0)::float AS percentual_meta
+            FROM pesquisas p
+            JOIN amostras_dimensao d ON d.id_amostra = p.id_amostra
+            LEFT JOIN amostras_cotas c ON c.id_amostra_dimensao = d.id_amostra_dimensao
+            WHERE p.id_pesquisa = :pid
+            GROUP BY d.id_amostra_dimensao, d.nome_dimensao, d.fonte_dados, d.ordem_exibicao, c.categoria
+            ORDER BY d.ordem_exibicao ASC, quantidade_meta DESC
+            """
+        ),
+        {"pid": id_pesquisa},
+    )
+    dimensoes = [dict(r) for r in dim_res.mappings().all()]
+
+    return {
+        "id_pesquisa": id_pesquisa,
+        "perguntas": perguntas,
+        "respostas_por_pergunta": respostas,
+        "relatorios": relatorios,
+        "dimensoes": dimensoes,
+    }
 

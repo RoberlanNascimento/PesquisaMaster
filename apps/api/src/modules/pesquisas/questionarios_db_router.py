@@ -36,12 +36,16 @@ class OpcaoRespostaCreate(BaseModel):
     id_grupo_opcao: int
     rotulo: str
     valor_numerico: int | None = None
-    ordem: int = 1
+    codigo_valor: int | None = None
+    ordem: int | None = None
+    ordem_exibicao: int | None = None
 
 
 class PerguntaCreate(BaseModel):
     enunciado: str
-    tipo_pergunta: str = "estimulada"
+    tipo_pergunta: str | None = None
+    tipo_questao: str | None = None
+    identificador_tecnico: str | None = None
     id_grupo_opcao: int | None = None
     obrigatoria: bool = True
 
@@ -49,13 +53,22 @@ class PerguntaCreate(BaseModel):
 class PerguntaUpdate(BaseModel):
     enunciado: str | None = None
     tipo_pergunta: str | None = None
+    tipo_questao: str | None = None
     id_grupo_opcao: int | None = None
 
 
 class ItemBateriaCreate(BaseModel):
     id_pergunta: int
-    rotulo_item: str
+    descricao_item: str | None = None
+    rotulo_item: str | None = None
     ordem: int = 1
+
+
+class ItemBateriaUpdate(BaseModel):
+    id_pergunta: int | None = None
+    descricao_item: str | None = None
+    rotulo_item: str | None = None
+    ordem: int | None = None
 
 
 class QuestionarioCreate(BaseModel):
@@ -68,10 +81,37 @@ class QuestionarioCreate(BaseModel):
 class QuestionarioPerguntaCreate(BaseModel):
     id_questionario: int
     id_pergunta: int
+    id_cenario: int | None = None
     ordem: int = 1
-    bloco: str | None = "Bloco Geral"
+    bloco: str | None = None
+    secao_bloco: str | None = None
     obrigatoria: bool = True
     id_usuario: int | None = None
+
+
+class QuestionarioPerguntaUpdate(BaseModel):
+    id_cenario: int | None = None
+    ordem: int | None = None
+    obrigatoria: bool | None = None
+    secao_bloco: str | None = None
+
+
+class RespostaItemCreate(BaseModel):
+    id_questionario_pergunta: int
+    id_cenario: int | None = None
+    id_opcao: int | None = None
+    id_candidato_produto: int | None = None
+    id_item_bateria: int | None = None
+    tipo_registro: str = "likert"
+    codigo_especial: str | None = None
+    valor_texto: str | None = None
+
+
+class EntrevistaCreate(BaseModel):
+    id_pesquisa: int
+    id_questionario: int
+    id_pesquisador: int | None = None
+    respostas: list[RespostaItemCreate]
 
 
 class CenarioPesquisaCreate(BaseModel):
@@ -146,10 +186,10 @@ async def get_questionarios_resumo(
         await session.execute(
             text(
                 """
-                SELECT ib.*, p.enunciado AS pergunta_enunciado
+                SELECT ib.*, ib.descricao_item AS rotulo_item, p.enunciado AS pergunta_enunciado
                 FROM public.perguntas_itens_bateria ib
                 LEFT JOIN public.perguntas p ON p.id_pergunta = ib.id_pergunta
-                ORDER BY ib.id_pergunta ASC, ib.id_item_bateria ASC
+                ORDER BY ib.id_pergunta ASC, ib.ordem ASC, ib.id_item_bateria ASC
                 """
             )
         )
@@ -172,12 +212,15 @@ async def get_questionarios_resumo(
         await session.execute(
             text(
                 """
-                SELECT qp.*, p.enunciado, g.nome_grupo, g.tipo_escala, u.nome AS usuario_nome
+                SELECT qp.*, p.enunciado, p.tipo_questao, p.id_grupo_opcao,
+                       g.nome_grupo, g.tipo_escala, u.nome AS usuario_nome,
+                       cp.identificador AS cenario_identificador, cp.tipo_cenario AS cenario_tipo
                 FROM public.questionario_perguntas qp
                 LEFT JOIN public.perguntas p ON p.id_pergunta = qp.id_pergunta
                 LEFT JOIN public.perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
                 LEFT JOIN public.usuarios u ON u.id_usuario = qp.id_usuario
-                ORDER BY qp.id_questionario ASC, qp.ordem ASC
+                LEFT JOIN public.cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
+                ORDER BY qp.id_questionario ASC, COALESCE(qp.id_cenario, 999999) ASC, qp.ordem ASC
                 """
             )
         )
@@ -226,15 +269,19 @@ async def get_questionarios_resumo(
     for row in candidatos_list:
         cid = row.get("id_candidato_produto")
         val = row.get("foto_url") or row.get("imagem_url") or row.get("url_foto")
-        if cid and isinstance(val, str) and val.strip():
+        if cid and isinstance(val, str) and val.strip() and not _is_proxy_foto_url(val):
             ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
             row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
+        elif isinstance(val, str) and _is_proxy_foto_url(val):
+            row["foto_url"] = None
     for row in cc_list:
         cid = row.get("id_candidato_produto")
         val = row.get("foto_url")
-        if cid and isinstance(val, str) and val.strip():
+        if cid and isinstance(val, str) and val.strip() and not _is_proxy_foto_url(val):
             ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
             row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
+        elif isinstance(val, str) and _is_proxy_foto_url(val):
+            row["foto_url"] = None
 
     return {
         "pesquisas": [dict(r) for r in pesquisas],
@@ -332,19 +379,21 @@ async def create_opcao_resposta(
     payload: OpcaoRespostaCreate,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
+    codigo_valor = payload.codigo_valor if payload.codigo_valor is not None else payload.valor_numerico
+    ordem_exibicao = payload.ordem_exibicao if payload.ordem_exibicao is not None else (payload.ordem or 1)
     res = await session.execute(
         text(
             """
-            INSERT INTO public.opcoes_resposta (id_grupo_opcao, rotulo, valor_numerico, ordem, id_organizacao)
-            VALUES (:id_grupo_opcao, :rotulo, :valor_numerico, :ordem, 1)
+            INSERT INTO public.opcoes_resposta (id_grupo_opcao, rotulo, codigo_valor, ordem_exibicao, id_organizacao)
+            VALUES (:id_grupo_opcao, :rotulo, :codigo_valor, :ordem_exibicao, 1)
             RETURNING *
             """
         ),
         {
             "id_grupo_opcao": payload.id_grupo_opcao,
             "rotulo": payload.rotulo.strip(),
-            "valor_numerico": payload.valor_numerico,
-            "ordem": payload.ordem,
+            "codigo_valor": codigo_valor,
+            "ordem_exibicao": ordem_exibicao,
         },
     )
     await session.commit()
@@ -363,14 +412,16 @@ async def update_opcao_resposta(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O rótulo da opção de resposta não pode ser vazio.",
         )
+    codigo_valor = payload.codigo_valor if payload.codigo_valor is not None else payload.valor_numerico
+    ordem_exibicao = payload.ordem_exibicao if payload.ordem_exibicao is not None else (payload.ordem or 1)
     res = await session.execute(
         text(
             """
             UPDATE public.opcoes_resposta
             SET id_grupo_opcao = :id_grupo_opcao,
                 rotulo = :rotulo,
-                valor_numerico = :valor_numerico,
-                ordem = :ordem
+                codigo_valor = :codigo_valor,
+                ordem_exibicao = :ordem_exibicao
             WHERE id_opcao = :id
             RETURNING *
             """
@@ -379,8 +430,8 @@ async def update_opcao_resposta(
             "id": id_opcao,
             "id_grupo_opcao": payload.id_grupo_opcao,
             "rotulo": rotulo,
-            "valor_numerico": payload.valor_numerico,
-            "ordem": payload.ordem,
+            "codigo_valor": codigo_valor,
+            "ordem_exibicao": ordem_exibicao,
         },
     )
     row = res.mappings().first()
@@ -431,6 +482,33 @@ async def list_perguntas(
     return [dict(r) for r in res.mappings().all()]
 
 
+_VALID_TIPOS_QUESTAO = {
+    "unica_escolha",
+    "multipla_escolha",
+    "matriz_bateria",
+    "ranking",
+    "texto_livre",
+}
+
+
+def _normalize_tipo_questao(raw: str | None) -> str:
+    val = (raw or "").strip().lower()
+    if val in _VALID_TIPOS_QUESTAO:
+        return val
+    mapping = {
+        "estimulada": "unica_escolha",
+        "espontanea": "texto_livre",
+        "espontânea": "texto_livre",
+        "rejeicao": "multipla_escolha",
+        "rejeição": "multipla_escolha",
+        "bateria": "matriz_bateria",
+        "matriz": "matriz_bateria",
+        "aberta": "texto_livre",
+        "texto": "texto_livre",
+    }
+    return mapping.get(val, "unica_escolha")
+
+
 @questionarios_db_router.post("/perguntas", status_code=status.HTTP_201_CREATED)
 async def create_pergunta(
     payload: PerguntaCreate,
@@ -442,17 +520,23 @@ async def create_pergunta(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O enunciado da pergunta é obrigatório.",
         )
+    tipo_questao = _normalize_tipo_questao(payload.tipo_questao or payload.tipo_pergunta)
+    ident_raw = (payload.identificador_tecnico or "").strip()
+    if not ident_raw:
+        digest = hashlib.md5(f"{enunciado}:{tipo_questao}".encode("utf-8")).hexdigest()[:8].upper()
+        ident_raw = f"PERG_{digest}"
     res = await session.execute(
         text(
             """
-            INSERT INTO public.perguntas (enunciado, tipo_pergunta, id_grupo_opcao, id_organizacao)
-            VALUES (:enunciado, :tipo_pergunta, :id_grupo_opcao, 1)
+            INSERT INTO public.perguntas (identificador_tecnico, enunciado, tipo_questao, id_grupo_opcao, id_organizacao)
+            VALUES (:identificador_tecnico, :enunciado, :tipo_questao, :id_grupo_opcao, 1)
             RETURNING *
             """
         ),
         {
+            "identificador_tecnico": ident_raw,
             "enunciado": enunciado,
-            "tipo_pergunta": payload.tipo_pergunta.strip(),
+            "tipo_questao": tipo_questao,
             "id_grupo_opcao": payload.id_grupo_opcao,
         },
     )
@@ -460,11 +544,10 @@ async def create_pergunta(
     return dict(res.mappings().first() or {})
 
 
-@questionarios_db_router.put("/perguntas/{id_pergunta}")
-async def update_pergunta(
+async def _update_pergunta_impl(
     id_pergunta: int,
     payload: PerguntaUpdate,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession,
 ) -> dict[str, Any]:
     existing_res = await session.execute(
         text("SELECT * FROM public.perguntas WHERE id_pergunta = :id"),
@@ -478,17 +561,22 @@ async def update_pergunta(
         )
 
     fields_set = payload.model_fields_set
-    enunciado = payload.enunciado.strip() if "enunciado" in fields_set and payload.enunciado is not None else existing["enunciado"]
+    enunciado = (
+        payload.enunciado.strip()
+        if "enunciado" in fields_set and payload.enunciado is not None
+        else existing["enunciado"]
+    )
     if not enunciado:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O enunciado da pergunta é obrigatório.",
         )
-    tipo_pergunta = (
-        payload.tipo_pergunta.strip()
-        if "tipo_pergunta" in fields_set and payload.tipo_pergunta is not None
-        else existing["tipo_pergunta"]
-    )
+    if "tipo_questao" in fields_set and payload.tipo_questao is not None:
+        tipo_questao = _normalize_tipo_questao(payload.tipo_questao)
+    elif "tipo_pergunta" in fields_set and payload.tipo_pergunta is not None:
+        tipo_questao = _normalize_tipo_questao(payload.tipo_pergunta)
+    else:
+        tipo_questao = existing["tipo_questao"]
     id_grupo_opcao = (
         payload.id_grupo_opcao
         if "id_grupo_opcao" in fields_set
@@ -500,7 +588,7 @@ async def update_pergunta(
             """
             UPDATE public.perguntas
             SET enunciado = :enunciado,
-                tipo_pergunta = :tipo_pergunta,
+                tipo_questao = :tipo_questao,
                 id_grupo_opcao = :id_grupo_opcao
             WHERE id_pergunta = :id
             RETURNING *
@@ -509,12 +597,30 @@ async def update_pergunta(
         {
             "id": id_pergunta,
             "enunciado": enunciado,
-            "tipo_pergunta": tipo_pergunta,
+            "tipo_questao": tipo_questao,
             "id_grupo_opcao": id_grupo_opcao,
         },
     )
     await session.commit()
     return dict(res.mappings().first() or {})
+
+
+@questionarios_db_router.put("/perguntas/{id_pergunta}")
+async def update_pergunta(
+    id_pergunta: int,
+    payload: PerguntaUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    return await _update_pergunta_impl(id_pergunta, payload, session)
+
+
+@questionarios_db_router.patch("/perguntas/{id_pergunta}")
+async def patch_pergunta(
+    id_pergunta: int,
+    payload: PerguntaUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    return await _update_pergunta_impl(id_pergunta, payload, session)
 
 
 @questionarios_db_router.delete("/perguntas/{id_pergunta}", status_code=status.HTTP_204_NO_CONTENT)
@@ -564,17 +670,23 @@ async def create_item_bateria(
     payload: ItemBateriaCreate,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
+    descricao = (payload.descricao_item or payload.rotulo_item or "").strip()
+    if not descricao:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A descrição do item de bateria é obrigatória.",
+        )
     res = await session.execute(
         text(
             """
-            INSERT INTO public.perguntas_itens_bateria (id_pergunta, rotulo_item, ordem, id_organizacao)
-            VALUES (:id_pergunta, :rotulo_item, :ordem, 1)
-            RETURNING *
+            INSERT INTO public.perguntas_itens_bateria (id_pergunta, descricao_item, ordem, id_organizacao)
+            VALUES (:id_pergunta, :descricao_item, :ordem, 1)
+            RETURNING *, descricao_item AS rotulo_item
             """
         ),
         {
             "id_pergunta": payload.id_pergunta,
-            "rotulo_item": payload.rotulo_item.strip(),
+            "descricao_item": descricao,
             "ordem": payload.ordem,
         },
     )
@@ -588,8 +700,8 @@ async def update_item_bateria(
     payload: ItemBateriaCreate,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    rotulo = payload.rotulo_item.strip()
-    if not rotulo:
+    descricao = (payload.descricao_item or payload.rotulo_item or "").strip()
+    if not descricao:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O rótulo do item de bateria não pode ser vazio.",
@@ -599,16 +711,16 @@ async def update_item_bateria(
             """
             UPDATE public.perguntas_itens_bateria
             SET id_pergunta = :id_pergunta,
-                rotulo_item = :rotulo_item,
+                descricao_item = :descricao_item,
                 ordem = :ordem
             WHERE id_item_bateria = :id
-            RETURNING *
+            RETURNING *, descricao_item AS rotulo_item
             """
         ),
         {
             "id": id_item_bateria,
             "id_pergunta": payload.id_pergunta,
-            "rotulo_item": rotulo,
+            "descricao_item": descricao,
             "ordem": payload.ordem,
         },
     )
@@ -620,6 +732,66 @@ async def update_item_bateria(
         )
     await session.commit()
     return dict(row)
+
+
+@questionarios_db_router.patch("/itens-bateria/{id_item_bateria}")
+async def patch_item_bateria(
+    id_item_bateria: int,
+    payload: ItemBateriaUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    existing_res = await session.execute(
+        text("SELECT * FROM public.perguntas_itens_bateria WHERE id_item_bateria = :id"),
+        {"id": id_item_bateria},
+    )
+    existing = existing_res.mappings().first()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item de bateria #{id_item_bateria} não encontrado.",
+        )
+    fields_set = payload.model_fields_set
+    new_id_pergunta = (
+        payload.id_pergunta
+        if "id_pergunta" in fields_set and payload.id_pergunta is not None
+        else existing["id_pergunta"]
+    )
+    if "descricao_item" in fields_set and payload.descricao_item is not None:
+        new_desc = payload.descricao_item.strip()
+    elif "rotulo_item" in fields_set and payload.rotulo_item is not None:
+        new_desc = payload.rotulo_item.strip()
+    else:
+        new_desc = existing["descricao_item"]
+    if not new_desc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A descrição do item de bateria não pode ser vazia.",
+        )
+    new_ordem = (
+        payload.ordem
+        if "ordem" in fields_set and payload.ordem is not None
+        else existing["ordem"]
+    )
+    res = await session.execute(
+        text(
+            """
+            UPDATE public.perguntas_itens_bateria
+            SET id_pergunta = :id_pergunta,
+                descricao_item = :descricao_item,
+                ordem = :ordem
+            WHERE id_item_bateria = :id
+            RETURNING *, descricao_item AS rotulo_item
+            """
+        ),
+        {
+            "id": id_item_bateria,
+            "id_pergunta": new_id_pergunta,
+            "descricao_item": new_desc,
+            "ordem": new_ordem,
+        },
+    )
+    await session.commit()
+    return dict(res.mappings().first() or {})
 
 
 @questionarios_db_router.delete("/itens-bateria/{id_item_bateria}", status_code=status.HTTP_204_NO_CONTENT)
@@ -634,28 +806,58 @@ async def delete_item_bateria(
     await session.commit()
 
 
-# --- Instância Aplicada à Pesquisa (Versionamento codigo_versao) ---
+# --- Instância Aplicada à Pesquisa (1 Formulário único por Pesquisa) ---
 @questionarios_db_router.post("/questionarios", status_code=status.HTTP_201_CREATED)
 async def create_questionario(
     payload: QuestionarioCreate,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    res = await session.execute(
+    existing_q = await session.execute(
         text(
             """
-            INSERT INTO public.questionarios (id_pesquisa, titulo, codigo_versao, ativo, id_organizacao)
-            VALUES (:id_pesquisa, :titulo, :codigo_versao, :ativo, 1)
-            RETURNING *
+            SELECT id_questionario
+            FROM public.questionarios
+            WHERE id_pesquisa = :id_pesquisa
+            LIMIT 1
             """
         ),
-        {
-            "id_pesquisa": payload.id_pesquisa,
-            "titulo": payload.titulo.strip(),
-            "codigo_versao": payload.codigo_versao.strip() or "v1.0",
-            "ativo": payload.ativo,
-        },
+        {"id_pesquisa": payload.id_pesquisa},
     )
-    await session.commit()
+    if existing_q.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta pesquisa já possui um formulário cadastrado. Cada pesquisa pode ter apenas um formulário.",
+        )
+
+    try:
+        res = await session.execute(
+            text(
+                """
+                INSERT INTO public.questionarios (id_pesquisa, titulo, codigo_versao, ativo, id_organizacao)
+                VALUES (:id_pesquisa, :titulo, :codigo_versao, :ativo, 1)
+                RETURNING *
+                """
+            ),
+            {
+                "id_pesquisa": payload.id_pesquisa,
+                "titulo": payload.titulo.strip(),
+                "codigo_versao": payload.codigo_versao.strip() or "v1.0",
+                "ativo": payload.ativo,
+            },
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        orig = getattr(exc, "orig", None)
+        pgcode = getattr(orig, "pgcode", None)
+        sqlstate = getattr(orig, "sqlstate", None)
+        err_msg = str(exc).lower()
+        if pgcode == "23505" or sqlstate == "23505" or "unique" in err_msg or "duplicate" in err_msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Esta pesquisa já possui um formulário cadastrado. Cada pesquisa pode ter apenas um formulário.",
+            ) from exc
+        raise
     return dict(res.mappings().first() or {})
 
 
@@ -694,18 +896,20 @@ async def create_questionario_pergunta(
             FROM public.questionario_perguntas
             WHERE id_questionario = :id_questionario
               AND id_pergunta = :id_pergunta
+              AND COALESCE(id_cenario, 0) = COALESCE(:id_cenario, 0)
             LIMIT 1
             """
         ),
         {
             "id_questionario": payload.id_questionario,
             "id_pergunta": payload.id_pergunta,
+            "id_cenario": payload.id_cenario,
         },
     )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Esta pergunta já está vinculada a este questionário.",
+            detail="Esta pergunta já está vinculada a este questionário neste cenário.",
         )
 
     uid = payload.id_usuario
@@ -713,20 +917,49 @@ async def create_questionario_pergunta(
         u_res = await session.execute(text("SELECT id_usuario FROM public.usuarios ORDER BY id_usuario ASC LIMIT 1"))
         uid = u_res.scalar_one_or_none()
 
+    ordem_final = payload.ordem
+    ordem_exists = await session.execute(
+        text(
+            """
+            SELECT 1
+            FROM public.questionario_perguntas
+            WHERE id_questionario = :id_questionario
+              AND ordem = :ordem
+            LIMIT 1
+            """
+        ),
+        {"id_questionario": payload.id_questionario, "ordem": ordem_final},
+    )
+    if ordem_exists.scalar_one_or_none() is not None:
+        max_res = await session.execute(
+            text(
+                "SELECT COALESCE(MAX(ordem), 0)::int + 1 FROM public.questionario_perguntas WHERE id_questionario = :id_questionario"
+            ),
+            {"id_questionario": payload.id_questionario},
+        )
+        ordem_final = int(max_res.scalar_one() or 1)
+
+    secao_bloco = (payload.secao_bloco or payload.bloco or "Bloco Geral").strip() or "Bloco Geral"
+
     try:
         res = await session.execute(
             text(
                 """
-                INSERT INTO public.questionario_perguntas (id_questionario, id_pergunta, ordem, secao_bloco, obrigatoria, id_usuario, id_organizacao)
-                VALUES (:id_questionario, :id_pergunta, :ordem, :secao_bloco, :obrigatoria, :id_usuario, 1)
+                INSERT INTO public.questionario_perguntas (
+                    id_questionario, id_pergunta, id_cenario, ordem, secao_bloco, obrigatoria, id_usuario, id_organizacao
+                )
+                VALUES (
+                    :id_questionario, :id_pergunta, :id_cenario, :ordem, :secao_bloco, :obrigatoria, :id_usuario, 1
+                )
                 RETURNING *
                 """
             ),
             {
                 "id_questionario": payload.id_questionario,
                 "id_pergunta": payload.id_pergunta,
-                "ordem": payload.ordem,
-                "secao_bloco": (payload.bloco or "Bloco Geral").strip(),
+                "id_cenario": payload.id_cenario,
+                "ordem": ordem_final,
+                "secao_bloco": secao_bloco,
                 "obrigatoria": payload.obrigatoria,
                 "id_usuario": uid,
             },
@@ -741,11 +974,286 @@ async def create_questionario_pergunta(
         if pgcode == "23505" or sqlstate == "23505" or "unique" in err_msg or "duplicate" in err_msg:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Esta pergunta já está vinculada a este questionário.",
+                detail="Esta pergunta já está vinculada a este questionário neste cenário ou ordem duplicada.",
             ) from exc
         raise
 
     return dict(res.mappings().first() or {})
+
+
+@questionarios_db_router.patch("/questionario-perguntas/{id_questionario_pergunta}")
+async def update_questionario_pergunta(
+    id_questionario_pergunta: int,
+    payload: QuestionarioPerguntaUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    existing_res = await session.execute(
+        text(
+            """
+            SELECT *
+            FROM public.questionario_perguntas
+            WHERE id_questionario_pergunta = :id
+            """
+        ),
+        {"id": id_questionario_pergunta},
+    )
+    existing = existing_res.mappings().first()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Vínculo questionario_pergunta #{id_questionario_pergunta} não encontrado.",
+        )
+
+    fields_set = payload.model_fields_set
+    new_id_cenario = payload.id_cenario if "id_cenario" in fields_set else existing["id_cenario"]
+    new_ordem = payload.ordem if "ordem" in fields_set and payload.ordem is not None else existing["ordem"]
+    new_obrigatoria = (
+        payload.obrigatoria if "obrigatoria" in fields_set and payload.obrigatoria is not None else existing["obrigatoria"]
+    )
+    new_secao_bloco = (
+        (payload.secao_bloco or "Bloco Geral").strip() or "Bloco Geral"
+        if "secao_bloco" in fields_set
+        else existing["secao_bloco"]
+    )
+
+    if "id_cenario" in fields_set:
+        dup_res = await session.execute(
+            text(
+                """
+                SELECT 1
+                FROM public.questionario_perguntas
+                WHERE id_questionario = :id_questionario
+                  AND id_pergunta = :id_pergunta
+                  AND COALESCE(id_cenario, 0) = COALESCE(:id_cenario, 0)
+                  AND id_questionario_pergunta <> :id
+                LIMIT 1
+                """
+            ),
+            {
+                "id_questionario": existing["id_questionario"],
+                "id_pergunta": existing["id_pergunta"],
+                "id_cenario": new_id_cenario,
+                "id": id_questionario_pergunta,
+            },
+        )
+        if dup_res.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Esta pergunta já está vinculada a este questionário neste cenário.",
+            )
+
+    try:
+        res = await session.execute(
+            text(
+                """
+                UPDATE public.questionario_perguntas
+                SET id_cenario = :id_cenario,
+                    ordem = :ordem,
+                    obrigatoria = :obrigatoria,
+                    secao_bloco = :secao_bloco
+                WHERE id_questionario_pergunta = :id
+                RETURNING *
+                """
+            ),
+            {
+                "id": id_questionario_pergunta,
+                "id_cenario": new_id_cenario,
+                "ordem": new_ordem,
+                "obrigatoria": new_obrigatoria,
+                "secao_bloco": new_secao_bloco,
+            },
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível atualizar a pergunta do formulário (conflito de ordem ou cenário).",
+        ) from exc
+
+    return dict(res.mappings().first() or {})
+
+
+@questionarios_db_router.post("/entrevistas", status_code=status.HTTP_201_CREATED)
+async def create_entrevista(
+    payload: EntrevistaCreate,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    if not payload.respostas:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Envie ao menos uma resposta para registrar a entrevista.",
+        )
+
+    pesq_res = await session.execute(
+        text(
+            """
+            SELECT id_pesquisa, is_bloqueada, COALESCE(id_organizacao, 1) AS id_organizacao
+            FROM public.pesquisas
+            WHERE id_pesquisa = :id_pesquisa
+            """
+        ),
+        {"id_pesquisa": payload.id_pesquisa},
+    )
+    pesq = pesq_res.mappings().first()
+    if not pesq:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pesquisa #{payload.id_pesquisa} não encontrada.",
+        )
+    if pesq["is_bloqueada"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta pesquisa está bloqueada/lacrada e não aceita novas entrevistas.",
+        )
+
+    q_res = await session.execute(
+        text(
+            """
+            SELECT id_questionario
+            FROM public.questionarios
+            WHERE id_questionario = :id_questionario
+              AND id_pesquisa = :id_pesquisa
+            """
+        ),
+        {"id_questionario": payload.id_questionario, "id_pesquisa": payload.id_pesquisa},
+    )
+    if q_res.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Questionário #{payload.id_questionario} não encontrado para a pesquisa #{payload.id_pesquisa}.",
+        )
+
+    tenant_id = int(pesq["id_organizacao"] or 1)
+    await session.execute(
+        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+        {"tid": str(tenant_id)},
+    )
+
+    qp_cen_res = await session.execute(
+        text(
+            """
+            SELECT id_questionario_pergunta, id_cenario
+            FROM public.questionario_perguntas
+            WHERE id_questionario = :id_questionario
+            """
+        ),
+        {"id_questionario": payload.id_questionario},
+    )
+    qp_cenario_map = {int(r["id_questionario_pergunta"]): r["id_cenario"] for r in qp_cen_res.mappings().all()}
+
+    valid_tipos = {"voto_direto", "rejeicao", "likert", "aprovacao", "texto"}
+    valid_especiais = {"branco", "nulo", "nao_sabe", "nao_respondeu"}
+
+    try:
+        pessoa_res = await session.execute(
+            text(
+                """
+                INSERT INTO public.pessoas (
+                    nome, sexo, faixa_etaria, escolaridade, faixa_renda,
+                    bairro_distrito, regiao_geografica, id_organizacao
+                )
+                VALUES (
+                    'Entrevistado CAPI', 'F', '25-34', 'Medio', '1 a 2 SM',
+                    'Geral', 'Geral', :id_org
+                )
+                RETURNING id_pessoa
+                """
+            ),
+            {"id_org": tenant_id},
+        )
+        id_pessoa = int(pessoa_res.scalar_one())
+
+        qp_pessoa_res = await session.execute(
+            text(
+                """
+                INSERT INTO public.questionarios_pessoas (
+                    id_questionario, id_pesquisa, id_pessoa, id_pesquisador,
+                    peso_amostral, status_auditoria, id_organizacao
+                )
+                VALUES (
+                    :id_questionario, :id_pesquisa, :id_pessoa, :id_pesquisador,
+                    1.000000, 'aprovada', :id_org
+                )
+                RETURNING id_questionario_pessoa
+                """
+            ),
+            {
+                "id_questionario": payload.id_questionario,
+                "id_pesquisa": payload.id_pesquisa,
+                "id_pessoa": id_pessoa,
+                "id_pesquisador": payload.id_pesquisador,
+                "id_org": tenant_id,
+            },
+        )
+        id_questionario_pessoa = int(qp_pessoa_res.scalar_one())
+
+        saved = 0
+        for item in payload.respostas:
+            tipo_reg = (item.tipo_registro or "").strip().lower()
+            if tipo_reg not in valid_tipos:
+                if item.id_candidato_produto is not None:
+                    tipo_reg = "voto_direto"
+                elif item.valor_texto and item.id_opcao is None:
+                    tipo_reg = "texto"
+                else:
+                    tipo_reg = "likert"
+
+            cod_esp = (item.codigo_especial or "").strip().lower() or None
+            if cod_esp is not None and cod_esp not in valid_especiais:
+                cod_esp = "nao_respondeu"
+
+            resolved_cenario = (
+                item.id_cenario
+                if item.id_cenario is not None
+                else qp_cenario_map.get(item.id_questionario_pergunta)
+            )
+
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO public.respostas (
+                        id_questionario_pessoa, id_questionario_pergunta,
+                        id_opcao, id_candidato_produto, id_item_bateria, id_cenario,
+                        tipo_registro, codigo_especial, valor_texto, id_organizacao
+                    )
+                    VALUES (
+                        :id_qp_pessoa, :id_qp,
+                        :id_opcao, :id_candidato, :id_item_bateria, :id_cenario,
+                        :tipo_registro, :codigo_especial, :valor_texto, :id_org
+                    )
+                    """
+                ),
+                {
+                    "id_qp_pessoa": id_questionario_pessoa,
+                    "id_qp": item.id_questionario_pergunta,
+                    "id_opcao": item.id_opcao,
+                    "id_candidato": item.id_candidato_produto,
+                    "id_item_bateria": item.id_item_bateria,
+                    "id_cenario": resolved_cenario,
+                    "tipo_registro": tipo_reg,
+                    "codigo_especial": cod_esp,
+                    "valor_texto": item.valor_texto.strip() if item.valor_texto else None,
+                    "id_org": tenant_id,
+                },
+            )
+            saved += 1
+
+        await session.commit()
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Falha ao salvar entrevista: {exc}",
+        ) from exc
+
+    return {
+        "id_questionario_pessoa": id_questionario_pessoa,
+        "respostas_salvas": saved,
+    }
 
 
 @questionarios_db_router.delete("/questionario-perguntas/{id_qp}", status_code=status.HTTP_204_NO_CONTENT)
@@ -820,10 +1328,19 @@ async def list_candidatos_produtos(
     for row in rows:
         cid = row.get("id_candidato_produto")
         val = row.get("foto_url") or row.get("imagem_url") or row.get("url_foto")
-        if cid and isinstance(val, str) and val.strip():
+        if cid and isinstance(val, str) and val.strip() and not _is_proxy_foto_url(val):
             ver = hashlib.md5(val.encode("utf-8")).hexdigest()[:8]
             row["foto_url"] = f"http://127.0.0.1:8000/api/v1/questionarios-db/candidatos/{cid}/foto?v={ver}"
+        elif isinstance(val, str) and _is_proxy_foto_url(val):
+            row["foto_url"] = None
     return rows
+
+
+def _is_proxy_foto_url(url: str | None) -> bool:
+    if not url:
+        return False
+    low = url.strip().lower()
+    return "/api/v1/questionarios-db/candidatos/" in low and "/foto" in low
 
 
 @questionarios_db_router.get("/candidatos/{id_candidato_produto}/foto")
@@ -838,18 +1355,21 @@ async def get_candidato_foto(
         {"id": id_candidato_produto},
     )
     foto_url = res.scalar_one_or_none()
-    if not foto_url or not isinstance(foto_url, str):
+    if not foto_url or not isinstance(foto_url, str) or _is_proxy_foto_url(foto_url):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada.")
 
     gcs = get_gcs_service()
-    downloaded = gcs.download_file(foto_url)
+    downloaded = await asyncio.to_thread(gcs.download_file, foto_url)
     if downloaded is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo de foto não encontrado no GCS.")
     data, content_type = downloaded
     return Response(
         content=data,
         media_type=content_type,
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+        },
     )
 
 
@@ -865,84 +1385,75 @@ async def create_candidato_produto(
             detail="O nome de urna / comercial é obrigatório.",
         )
 
-    has_org_res = await session.execute(
+    cols_res = await session.execute(
         text(
             """
-            SELECT 1
+            SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'candidatos_produtos'
-              AND column_name = 'id_organizacao'
-            LIMIT 1
             """
         )
     )
-    has_org = has_org_res.scalar_one_or_none() is not None
-
-    insert_sql = (
-        """
-        INSERT INTO public.candidatos_produtos (
-            nome_urna_comercial,
-            nome_completo_razao,
-            tipo,
-            numero_partido,
-            sigla_partido_marca,
-            cargo_categoria,
-            cor_hex,
-            ativo,
-            id_organizacao
-        )
-        VALUES (
-            :nome_urna_comercial,
-            :nome_completo_razao,
-            :tipo,
-            :numero_partido,
-            :sigla_partido_marca,
-            :cargo_categoria,
-            :cor_hex,
-            :ativo,
-            1
-        )
-        RETURNING *
-        """
-        if has_org
-        else """
-        INSERT INTO public.candidatos_produtos (
-            nome_urna_comercial,
-            nome_completo_razao,
-            tipo,
-            numero_partido,
-            sigla_partido_marca,
-            cargo_categoria,
-            cor_hex,
-            ativo
-        )
-        VALUES (
-            :nome_urna_comercial,
-            :nome_completo_razao,
-            :tipo,
-            :numero_partido,
-            :sigla_partido_marca,
-            :cargo_categoria,
-            :cor_hex,
-            :ativo
-        )
-        RETURNING *
-        """
+    existing_cols = {r[0] for r in cols_res.fetchall()}
+    has_org = "id_organizacao" in existing_cols
+    photo_col = (
+        "foto_url"
+        if "foto_url" in existing_cols
+        else "imagem_url"
+        if "imagem_url" in existing_cols
+        else "url_foto"
+        if "url_foto" in existing_cols
+        else None
     )
 
+    cols = [
+        "nome_urna_comercial",
+        "nome_completo_razao",
+        "tipo",
+        "numero_partido",
+        "sigla_partido_marca",
+        "cargo_categoria",
+        "cor_hex",
+        "ativo",
+    ]
+    vals = [
+        ":nome_urna_comercial",
+        ":nome_completo_razao",
+        ":tipo",
+        ":numero_partido",
+        ":sigla_partido_marca",
+        ":cargo_categoria",
+        ":cor_hex",
+        ":ativo",
+    ]
+    params: dict[str, Any] = {
+        "nome_urna_comercial": nome_urna,
+        "nome_completo_razao": (payload.nome_completo_razao or nome_urna).strip(),
+        "tipo": (payload.tipo or "candidato").strip(),
+        "numero_partido": payload.numero_partido,
+        "sigla_partido_marca": payload.sigla_partido_marca.strip() if payload.sigla_partido_marca else None,
+        "cargo_categoria": (payload.cargo_categoria or "Prefeito").strip(),
+        "cor_hex": (payload.cor_hex or "#3b82f6").strip(),
+        "ativo": payload.ativo,
+    }
+    if photo_col is not None and payload.foto_url and not _is_proxy_foto_url(payload.foto_url):
+        cols.append(photo_col)
+        vals.append(":foto_url")
+        params["foto_url"] = payload.foto_url.strip()
+    if has_org:
+        cols.append("id_organizacao")
+        vals.append("1")
+
     res = await session.execute(
-        text(insert_sql),
-        {
-            "nome_urna_comercial": nome_urna,
-            "nome_completo_razao": (payload.nome_completo_razao or nome_urna).strip(),
-            "tipo": (payload.tipo or "candidato").strip(),
-            "numero_partido": payload.numero_partido,
-            "sigla_partido_marca": payload.sigla_partido_marca.strip() if payload.sigla_partido_marca else None,
-            "cargo_categoria": (payload.cargo_categoria or "Prefeito").strip(),
-            "cor_hex": (payload.cor_hex or "#3b82f6").strip(),
-            "ativo": payload.ativo,
-        },
+        text(
+            f"""
+            INSERT INTO public.candidatos_produtos ({", ".join(cols)})
+            VALUES ({", ".join(vals)})
+            RETURNING *
+            """
+        ),
+        params,
     )
     await session.commit()
     return dict(res.mappings().first() or {})
@@ -1104,8 +1615,13 @@ async def update_candidato_produto(
         "ativo": payload.ativo,
     }
     if photo_col is not None:
-        set_clauses.append(f"{photo_col} = :foto_url")
-        params["foto_url"] = payload.foto_url.strip() if payload.foto_url else None
+        incoming_foto = payload.foto_url.strip() if payload.foto_url else None
+        is_self_proxy = bool(
+            incoming_foto and "/questionarios-db/candidatos/" in incoming_foto and "/foto" in incoming_foto
+        )
+        if not is_self_proxy:
+            set_clauses.append(f"{photo_col} = :foto_url")
+            params["foto_url"] = incoming_foto
 
     res = await session.execute(
         text(

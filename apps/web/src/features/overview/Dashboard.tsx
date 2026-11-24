@@ -36,25 +36,51 @@ export function Dashboard(): React.JSX.Element {
     const relatoriosAll = Array.isArray(dbStats.relatorios) ? dbStats.relatorios : [];
     const perguntasAll = Array.isArray(dbStats.perguntas) ? dbStats.perguntas : [];
 
-    const PALETTE = ["#8ab4f8", "#81c995", "#fde293", "#f28b82", "#c58af9", "#78d9ec", "#94a3b8"];
+    const PALETTE = [
+      "#93c5fd",
+      "#86efac",
+      "#fcd34d",
+      "#f9a8d4",
+      "#c4b5fd",
+      "#67e8f9",
+      "#fdba74",
+      "#cbd5e1",
+    ];
+    const PASTEL_REJECTION = "#fca5a5";
+
+    const toPastelHex = (rawHex: string | null | undefined, fallback: string): string => {
+      if (!rawHex || typeof rawHex !== "string") return fallback;
+      const clean = rawHex.trim().replace(/^#/, "");
+      if (!/^[0-9a-fA-F]{6}$/.test(clean)) return fallback;
+      const r = parseInt(clean.slice(0, 2), 16);
+      const g = parseInt(clean.slice(2, 4), 16);
+      const b = parseInt(clean.slice(4, 6), 16);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      if (luminance > 0.9) return fallback;
+      const mix = (ch: number) => Math.round(ch * 0.52 + 255 * 0.48);
+      const toHex = (n: number) => Math.min(255, Math.max(0, n)).toString(16).padStart(2, "0");
+      return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+    };
 
     const parseCrosstabRows = (items: any[]): any[] =>
       items.map((item: any, idx: number) => {
         const rawName = String(item.candidato ?? "Sem identificação");
         const match = rawName.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        const fallbackColor = PALETTE[idx % PALETTE.length] || "#93c5fd";
         return {
-          candidato: match ? match[1].trim() : rawName,
-          partido: match ? match[2].trim() : "NS/NR",
+          candidato: match?.[1]?.trim() ?? rawName,
+          partido: match?.[2]?.trim() ?? "NS/NR",
           votos: Number(item.votos) || 0,
-          cor_hex: PALETTE[idx % PALETTE.length],
+          cor_hex: toPastelHex(item.cor_hex, fallbackColor),
         };
       });
 
-    const toPoints = (rows: any[], prefix: string): CandidateStatPoint[] => {
+    const toPoints = (rows: any[], prefix: string, forceColor?: string): CandidateStatPoint[] => {
       const total = rows.reduce((acc: number, v: any) => acc + (Number(v.votos) || 0), 0);
       return rows.map((v: any, idx: number) => {
         const qtd = Number(v.votos) || 0;
         const pct = total > 0 ? (qtd / total) * 100 : 0;
+        const fallbackColor = PALETTE[idx % PALETTE.length] || "#93c5fd";
         return {
           code: `${prefix}-${idx + 1}`,
           name: v.candidato,
@@ -62,7 +88,7 @@ export function Dashboard(): React.JSX.Element {
           quantity: qtd,
           frequency: `${qtd}`,
           percentage: pct.toFixed(2),
-          color: v.cor_hex || PALETTE[idx % PALETTE.length],
+          color: forceColor || toPastelHex(v.cor_hex, fallbackColor),
         };
       });
     };
@@ -119,7 +145,7 @@ export function Dashboard(): React.JSX.Element {
           : Array.isArray(crosstab.rejeicao)
             ? parseCrosstabRows(crosstab.rejeicao)
             : [];
-      const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`);
+      const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`, PASTEL_REJECTION);
       const sampleCount = stimulatedPoints.reduce((acc, pt) => acc + pt.quantity, 0);
 
       const pergsPesq = perguntasAll.filter((pg: any) => pg.id_pesquisa === p.id_pesquisa);

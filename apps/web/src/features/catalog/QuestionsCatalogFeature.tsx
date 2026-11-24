@@ -7,6 +7,7 @@ import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 
 const { colors } = NOCTURNE_TOKENS;
 const API_PERGUNTAS = "http://127.0.0.1:8000/api/v1/questionarios-db/perguntas";
+const API_ITENS_BATERIA = "http://127.0.0.1:8000/api/v1/questionarios-db/itens-bateria";
 const API_RESUMO = "http://127.0.0.1:8000/api/v1/questionarios-db/resumo";
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -43,9 +44,19 @@ interface ScaleGroupOption {
   readonly scaleType: string;
 }
 
+interface BatteryItemRecord {
+  readonly id: number;
+  readonly questionId: number;
+  readonly label: string;
+  readonly order: number;
+}
+
 export function QuestionsCatalogFeature(): React.JSX.Element {
   const [questions, setQuestions] = useState<readonly QuestionRecord[]>([]);
   const [scaleGroups, setScaleGroups] = useState<readonly ScaleGroupOption[]>([]);
+  const [batteryItems, setBatteryItems] = useState<readonly BatteryItemRecord[]>([]);
+  const [newBatteryLabel, setNewBatteryLabel] = useState("");
+  const [batteryBusy, setBatteryBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("TODOS");
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -96,13 +107,23 @@ export function QuestionsCatalogFeature(): React.JSX.Element {
     try {
       const res = await fetch(API_RESUMO, { cache: "no-store" });
       if (!res.ok) return;
-      const json = (await res.json()) as { grupos_opcoes?: any[] };
+      const json = (await res.json()) as { grupos_opcoes?: any[]; itens_bateria?: any[] };
       if (Array.isArray(json.grupos_opcoes)) {
         setScaleGroups(
           json.grupos_opcoes.map((g) => ({
             id: Number(g.id_grupo_opcao),
             name: String(g.nome_grupo ?? `Grupo #${g.id_grupo_opcao}`),
             scaleType: String(g.tipo_escala ?? "nominal"),
+          }))
+        );
+      }
+      if (Array.isArray(json.itens_bateria)) {
+        setBatteryItems(
+          json.itens_bateria.map((ib) => ({
+            id: Number(ib.id_item_bateria),
+            questionId: Number(ib.id_pergunta),
+            label: String(ib.rotulo_item ?? ""),
+            order: Number(ib.ordem ?? 1),
           }))
         );
       }
@@ -133,7 +154,65 @@ export function QuestionsCatalogFeature(): React.JSX.Element {
     setEnunciado(q.text);
     setTipoPergunta(q.type || "estimulada");
     setGrupoId(q.groupId !== null ? String(q.groupId) : "");
+    setNewBatteryLabel("");
     setDrawerOpen(true);
+  };
+
+  const editingBatteryItems = useMemo(
+    () =>
+      editingQuestion
+        ? batteryItems
+            .filter((ib) => ib.questionId === editingQuestion.id)
+            .sort((a, b) => a.order - b.order)
+        : [],
+    [batteryItems, editingQuestion]
+  );
+
+  const handleAddBatteryItem = async (): Promise<void> => {
+    if (!editingQuestion || !newBatteryLabel.trim()) return;
+    setBatteryBusy(true);
+    setModalError(null);
+    try {
+      const nextOrder = editingBatteryItems.reduce((m, ib) => Math.max(m, ib.order), 0) + 1;
+      const res = await fetch(API_ITENS_BATERIA, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_pergunta: editingQuestion.id,
+          rotulo_item: newBatteryLabel.trim(),
+          ordem: nextOrder,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(typeof err?.detail === "string" ? err.detail : `Erro ao adicionar item (HTTP ${res.status}).`);
+      }
+      setNewBatteryLabel("");
+      await loadScaleGroups();
+      notifySuccess("Item de bateria adicionado.");
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : "Erro ao adicionar item de bateria.");
+    } finally {
+      setBatteryBusy(false);
+    }
+  };
+
+  const handleDeleteBatteryItem = async (itemId: number): Promise<void> => {
+    setBatteryBusy(true);
+    setModalError(null);
+    try {
+      const res = await fetch(`${API_ITENS_BATERIA}/${itemId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(typeof err?.detail === "string" ? err.detail : `Erro ao remover item (HTTP ${res.status}).`);
+      }
+      await loadScaleGroups();
+      notifySuccess("Item de bateria removido.");
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : "Erro ao remover item de bateria.");
+    } finally {
+      setBatteryBusy(false);
+    }
   };
 
   const requestDelete = (q: QuestionRecord): void => {
@@ -354,6 +433,18 @@ export function QuestionsCatalogFeature(): React.JSX.Element {
           { header: "Tipo / Formato", key: "type", render: (q) => <span style={{ color: "#a78bfa", fontWeight: 600 }}>{q.type}</span> },
           { header: "Régua / Grupo de Opções", key: "scaleGroup", render: (q) => <span style={{ color: "#94a3b8" }}>{q.scaleGroup}</span> },
           {
+            header: "Itens de Bateria",
+            key: "batteryCount",
+            render: (q) => {
+              const count = batteryItems.filter((ib) => ib.questionId === q.id).length;
+              return (
+                <span style={{ fontSize: "12px", color: count > 0 ? colors.primaryContainer : colors.textMuted, fontWeight: count > 0 ? 600 : 400 }}>
+                  {count > 0 ? `${count} item(ns)` : "—"}
+                </span>
+              );
+            },
+          },
+          {
             header: "Questionários",
             key: "linkedQuestionnairesCount",
             render: (q) => (
@@ -555,6 +646,82 @@ export function QuestionsCatalogFeature(): React.JSX.Element {
               onChange={setGrupoId}
             />
           </div>
+
+          {editingQuestion && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingTop: "8px", borderTop: `1px solid ${colors.borderSubtle}` }}>
+              <label style={LABEL_STYLE}>Itens de Bateria ({editingBatteryItems.length})</label>
+              {editingBatteryItems.length === 0 ? (
+                <div style={{ fontSize: "12px", color: colors.textMuted }}>
+                  Nenhum item de bateria vinculado a esta pergunta.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {editingBatteryItems.map((ib) => (
+                    <div
+                      key={ib.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.borderSubtle}`,
+                        backgroundColor: colors.surfaceCard,
+                        fontSize: "12.5px",
+                      }}
+                    >
+                      <span>#{ib.order} {ib.label}</span>
+                      <button
+                        type="button"
+                        disabled={batteryBusy}
+                        onClick={() => void handleDeleteBatteryItem(ib.id)}
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          border: "none",
+                          backgroundColor: colors.errorContainer,
+                          color: colors.onErrorContainer,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: batteryBusy ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  style={INPUT_STYLE}
+                  value={newBatteryLabel}
+                  onChange={(e) => setNewBatteryLabel(e.target.value)}
+                  placeholder="Novo item de bateria (ex: Saúde Pública)"
+                />
+                <button
+                  type="button"
+                  disabled={batteryBusy || !newBatteryLabel.trim()}
+                  onClick={() => void handleAddBatteryItem()}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "none",
+                    backgroundColor: colors.primaryContainer,
+                    color: colors.onPrimary,
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: batteryBusy || !newBatteryLabel.trim() ? "not-allowed" : "pointer",
+                    opacity: batteryBusy || !newBatteryLabel.trim() ? 0.5 : 1,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  + Item
+                </button>
+              </div>
+            </div>
+          )}
 
           {editingQuestion && editingQuestion.linkedQuestionnairesCount > 0 && (
             <div

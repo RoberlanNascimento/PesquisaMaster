@@ -24,6 +24,7 @@ import { RawAnswersFeature } from "../../features/tabulation/RawAnswersFeature";
 import { TabulationReportsFeature } from "../../features/analytics/TabulationReportsFeature";
 import { TseTabulationFeature } from "../../features/analytics/TseTabulationFeature";
 import { TsePlanningFeature } from "../../features/planning/TsePlanningFeature";
+import { ClientPresentationReportFeature } from "../../features/planning/ClientPresentationReportFeature";
 import { MunicipalitiesCrudScreen } from "../../features/regions/MunicipalitiesCrudScreen";
 import { MunicipalRegionsFeature } from "../../features/regions/MunicipalRegionsFeature";
 import { NeighborhoodsCrudScreen } from "../../features/regions/NeighborhoodsCrudScreen";
@@ -129,6 +130,9 @@ export function WorkspaceTabResolver({ activeTab }: WorkspaceTabResolverProps): 
     case "tse-planning":
     case "dispatch-tse-group":
       return <TsePlanningFeature />;
+
+    case "client-presentation":
+      return <ClientPresentationReportFeature />;
 
     case "regions-municipalities":
       return <MunicipalitiesCrudScreen />;

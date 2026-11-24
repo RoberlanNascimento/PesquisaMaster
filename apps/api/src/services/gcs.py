@@ -9,9 +9,11 @@ from __future__ import annotations
 from datetime import timedelta
 from functools import lru_cache
 import logging
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any, BinaryIO
+from urllib.parse import unquote
 import uuid
 
 from src.core.config import get_settings
@@ -106,6 +108,7 @@ class GCSService:
 
         if "?" in path:
             path = path.split("?", maxsplit=1)[0]
+        path = unquote(path).lstrip("/")
         return path or None
 
     def upload_file(
@@ -192,6 +195,22 @@ class GCSService:
             logger.error("Falha ao remover arquivo do GCS: %s", exc, exc_info=True)
             return False
 
+    @staticmethod
+    def _detect_content_type(blob_path: str, data: bytes, blob_content_type: str | None) -> str:
+        """Determina o Content-Type real a partir dos metadados, magic bytes ou extensão."""
+        if blob_content_type and blob_content_type != "application/octet-stream":
+            return blob_content_type
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if data.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if data.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif"
+        if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            return "image/webp"
+        guessed, _ = mimetypes.guess_type(blob_path)
+        return guessed or "image/jpeg"
+
     def download_file(self, file_url_or_path: str | None) -> tuple[bytes, str] | None:
         """Baixa os bytes e o content_type de um objeto do bucket GCS."""
         if not file_url_or_path:
@@ -199,13 +218,15 @@ class GCSService:
         try:
             blob_path = self._extract_blob_path(file_url_or_path)
             if not blob_path:
+                logger.warning("GCS download_file: não foi possível extrair blob_path de %s", file_url_or_path)
                 return None
             bucket = self._get_bucket()
             blob = bucket.blob(blob_path)
             if not blob.exists():
+                logger.warning("GCS download_file: objeto inexistente no bucket %s: %s", self.bucket_name, blob_path)
                 return None
             data = blob.download_as_bytes()
-            content_type = blob.content_type or "image/jpeg"
+            content_type = self._detect_content_type(blob_path, data, blob.content_type)
             return data, content_type
         except Exception as exc:
             logger.warning("Falha ao baixar arquivo do GCS (%s): %s", file_url_or_path, exc)

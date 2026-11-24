@@ -194,13 +194,19 @@ export const PRIMARY_NAV_ITEMS: readonly NavItemConfig[] = [
   {
     id: "dispatch-tse-group",
     path: "/despacho-tse",
-    label: "Despacho TSE",
+    label: "Relatórios",
     icon: "dispatch-tse",
     subItems: [
       {
         id: "tse-planning",
         path: "/despacho-tse",
-        label: "Registro, Assinatura e Blindagem",
+        label: "Entregar ao STF",
+        icon: "dot",
+      },
+      {
+        id: "client-presentation",
+        path: "/relatorios/apresentacao",
+        label: "Apresentação",
         icon: "dot",
       },
     ],

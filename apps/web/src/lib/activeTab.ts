@@ -3,6 +3,7 @@ export type ActiveTab =
   | "overview-group"
   | "client-company"
   | "tse-planning"
+  | "client-presentation"
   | "dispatch-tse-group"
   | "field-pwa"
   | "supervision"
