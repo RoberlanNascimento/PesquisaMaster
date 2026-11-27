@@ -53,10 +53,10 @@ async def list_bairros(
 ) -> list[dict[str, Any]]:
     sql = (
         "SELECT b.*, r.nome_regiao, r.sigla AS regiao_sigla, m.nome AS municipio_nome, "
-        "e.sigla AS uf FROM bairros_ibge b "
-        "LEFT JOIN regiao_zonas r ON b.id_regiao_zona = r.id_regiao_zona "
-        "LEFT JOIN municipios m ON b.id_municipio = m.id_municipio "
-        "LEFT JOIN estados e ON m.id_estado = e.id_estado "
+        "e.sigla AS uf FROM geo_bairros_ibge b "
+        "LEFT JOIN geo_regiao_zonas r ON b.id_regiao_zona = r.id_regiao_zona "
+        "LEFT JOIN geo_municipios m ON b.id_municipio = m.id_municipio "
+        "LEFT JOIN geo_estados e ON m.id_estado = e.id_estado "
         "WHERE 1=1"
     )
     params: dict[str, Any] = {"lim": limit}
@@ -79,10 +79,10 @@ async def list_bairros(
 async def get_bairro(id_bairro: int, session: DbSessionDep) -> dict[str, Any]:
     sql = (
         "SELECT b.*, r.nome_regiao, r.sigla AS regiao_sigla, m.nome AS municipio_nome, "
-        "e.sigla AS uf FROM bairros_ibge b "
-        "LEFT JOIN regiao_zonas r ON b.id_regiao_zona = r.id_regiao_zona "
-        "LEFT JOIN municipios m ON b.id_municipio = m.id_municipio "
-        "LEFT JOIN estados e ON m.id_estado = e.id_estado "
+        "e.sigla AS uf FROM geo_bairros_ibge b "
+        "LEFT JOIN geo_regiao_zonas r ON b.id_regiao_zona = r.id_regiao_zona "
+        "LEFT JOIN geo_municipios m ON b.id_municipio = m.id_municipio "
+        "LEFT JOIN geo_estados e ON m.id_estado = e.id_estado "
         "WHERE b.id_bairro = :id"
     )
     res = await session.execute(text(sql), {"id": id_bairro})
@@ -95,7 +95,7 @@ async def get_bairro(id_bairro: int, session: DbSessionDep) -> dict[str, Any]:
 @bairros_router.post("", status_code=status.HTTP_201_CREATED, summary="Cadastra novo bairro")
 async def create_bairro(payload: BairroCreate, session: DbSessionDep) -> dict[str, Any]:
     query = text(
-        "INSERT INTO bairros_ibge (id_municipio, id_regiao_zona, codigo_bairro_ibge, "
+        "INSERT INTO geo_bairros_ibge (id_municipio, id_regiao_zona, codigo_bairro_ibge, "
         "nome_bairro, populacao_total, eleitorado_total, renda_media_domiciliar, ativo) "
         "VALUES (:id_mun, :id_rz, :cod, :nome, :pop, :eleit, :renda, :ativo) RETURNING *"
     )
@@ -124,7 +124,7 @@ async def update_bairro(
     id_bairro: int, payload: BairroUpdate, session: DbSessionDep
 ) -> dict[str, Any]:
     current_res = await session.execute(
-        text("SELECT * FROM bairros_ibge WHERE id_bairro = :id"), {"id": id_bairro}
+        text("SELECT * FROM geo_bairros_ibge WHERE id_bairro = :id"), {"id": id_bairro}
     )
     current = current_res.fetchone()
     if not current:
@@ -161,7 +161,7 @@ async def update_bairro(
     clean_ativo = payload.ativo if payload.ativo is not None else cur_map["ativo"]
 
     query = text(
-        "UPDATE bairros_ibge SET id_municipio = :id_mun, id_regiao_zona = :id_rz, "
+        "UPDATE geo_bairros_ibge SET id_municipio = :id_mun, id_regiao_zona = :id_rz, "
         "codigo_bairro_ibge = :cod, nome_bairro = :nome, populacao_total = :pop, "
         "eleitorado_total = :eleit, renda_media_domiciliar = :renda, ativo = :ativo "
         "WHERE id_bairro = :id RETURNING *"
@@ -192,7 +192,7 @@ async def update_bairro(
 @bairros_router.delete("/{id_bairro}", summary="Remove bairro")
 async def delete_bairro(id_bairro: int, session: DbSessionDep) -> dict[str, Any]:
     res = await session.execute(
-        text("DELETE FROM bairros_ibge WHERE id_bairro = :id RETURNING id_bairro"),
+        text("DELETE FROM geo_bairros_ibge WHERE id_bairro = :id RETURNING id_bairro"),
         {"id": id_bairro},
     )
     deleted = res.fetchone()

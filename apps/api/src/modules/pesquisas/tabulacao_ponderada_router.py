@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 
 tabulacao_ponderada_router = APIRouter(
     prefix="/api/v1/tabulacao-ponderada",
@@ -124,6 +125,7 @@ async def executar_ponderacao_raking(
     id_pesquisa: int,
     payload: RakingRequest,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     pesq_res = await session.execute(
         text(
@@ -131,12 +133,12 @@ async def executar_ponderacao_raking(
             SELECT p.id_pesquisa, p.id_amostra, p.is_bloqueada,
                    COALESCE(a.z_score, 1.96) AS z_score,
                    COALESCE(a.margem_erro, 3.5) AS margem_erro
-            FROM public.pesquisas p
-            LEFT JOIN public.amostras a ON a.id_amostra = p.id_amostra
-            WHERE p.id_pesquisa = :pid
+            FROM public.pesq_pesquisas p
+            LEFT JOIN public.pesq_amostras a ON a.id_amostra = p.id_amostra
+            WHERE p.id_pesquisa = :pid AND p.id_organizacao = :tid
             """
         ),
-        {"pid": id_pesquisa},
+        {"pid": id_pesquisa, "tid": tenant.tenant_id},
     )
     pesq = pesq_res.mappings().first()
     if not pesq:
@@ -162,8 +164,8 @@ async def executar_ponderacao_raking(
                 p.escolaridade,
                 p.faixa_renda,
                 p.religiao
-            FROM public.questionarios_pessoas qp
-            JOIN public.pessoas p ON p.id_pessoa = qp.id_pessoa
+            FROM public.campo_questionarios_pessoas qp
+            JOIN public.campo_pessoas p ON p.id_pessoa = qp.id_pessoa
             WHERE qp.id_pesquisa = :pid
               AND qp.status_auditoria = 'aprovada'
             ORDER BY qp.id_questionario_pessoa
@@ -190,8 +192,8 @@ async def executar_ponderacao_raking(
                 ad.nome_dimensao,
                 ac.categoria,
                 SUM(ac.quantidade_meta)::NUMERIC AS meta_total_cat
-            FROM public.amostras_dimensao ad
-            JOIN public.amostras_cotas ac ON ac.id_amostra_dimensao = ad.id_amostra_dimensao
+            FROM public.pesq_amostras_dimensao ad
+            JOIN public.pesq_amostras_cotas ac ON ac.id_amostra_dimensao = ad.id_amostra_dimensao
             WHERE ad.id_amostra = :aid
             GROUP BY ad.nome_dimensao, ac.categoria
             """
@@ -261,7 +263,7 @@ async def executar_ponderacao_raking(
     await session.execute(
         text(
             """
-            UPDATE public.questionarios_pessoas
+            UPDATE public.campo_questionarios_pessoas
             SET peso_amostral = :peso
             WHERE id_questionario_pessoa = :id_qp
             """
@@ -293,13 +295,13 @@ async def executar_ponderacao_raking(
     if payload.salvar_relatorio_diagnostico:
         uid = payload.id_usuario
         if uid is None:
-            u_res = await session.execute(text("SELECT id_usuario FROM public.usuarios ORDER BY id_usuario ASC LIMIT 1"))
+            u_res = await session.execute(text("SELECT id_usuario FROM public.sys_usuarios ORDER BY id_usuario ASC LIMIT 1"))
             uid = u_res.scalar_one_or_none()
         if uid is not None:
             await session.execute(
                 text(
                     """
-                    INSERT INTO public.relatorios_tabulacao (
+                    INSERT INTO public.pesq_relatorios_tabulacao (
                         id_pesquisa, id_usuario, titulo_relatorio, configuracao_crosstab
                     ) VALUES (
                         :pid, :uid, :titulo, CAST(:cfg AS JSONB)
@@ -327,6 +329,7 @@ async def obter_tabulacao_ponderada(
     id_pesquisa: int,
     dimensao_crosstab: str = Query(default="sexo"),
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     pesq_res = await session.execute(
         text(
@@ -337,14 +340,14 @@ async def obter_tabulacao_ponderada(
                    COALESCE(a.tamanho_amostral, 0) AS tamanho_amostral,
                    COALESCE(a.margem_erro, 0) AS margem_erro,
                    COALESCE(a.z_score, 1.96) AS z_score
-            FROM public.pesquisas p
-            LEFT JOIN public.municipios m ON m.id_municipio = p.id_municipio
-            LEFT JOIN public.estados e ON e.id_estado = m.id_estado
-            LEFT JOIN public.amostras a ON a.id_amostra = p.id_amostra
-            WHERE p.id_pesquisa = :pid
+            FROM public.pesq_pesquisas p
+            LEFT JOIN public.geo_municipios m ON m.id_municipio = p.id_municipio
+            LEFT JOIN public.geo_estados e ON e.id_estado = m.id_estado
+            LEFT JOIN public.pesq_amostras a ON a.id_amostra = p.id_amostra
+            WHERE p.id_pesquisa = :pid AND p.id_organizacao = :tid
             """
         ),
-        {"pid": id_pesquisa},
+        {"pid": id_pesquisa, "tid": tenant.tenant_id},
     )
     pesq = pesq_res.mappings().first()
     if not pesq:
@@ -360,7 +363,7 @@ async def obter_tabulacao_ponderada(
                 COALESCE(MIN(COALESCE(peso_amostral, 1.0)), 1.0)::float AS peso_min,
                 COALESCE(MAX(COALESCE(peso_amostral, 1.0)), 1.0)::float AS peso_max,
                 COALESCE(AVG(COALESCE(peso_amostral, 1.0)), 1.0)::float AS peso_medio
-            FROM public.questionarios_pessoas
+            FROM public.campo_questionarios_pessoas
             WHERE id_pesquisa = :pid
               AND status_auditoria = 'aprovada'
             """
@@ -380,7 +383,7 @@ async def obter_tabulacao_ponderada(
         text(
             """
             SELECT id_relatorio, titulo_relatorio, configuracao_crosstab, criado_em
-            FROM public.relatorios_tabulacao
+            FROM public.pesq_relatorios_tabulacao
             WHERE id_pesquisa = :pid
               AND titulo_relatorio LIKE 'Diagnóstico de Ponderação Raking%'
             ORDER BY id_relatorio DESC
@@ -405,10 +408,10 @@ async def obter_tabulacao_ponderada(
                 (r.id_candidato_produto IS NULL) AS is_nao_valido,
                 COUNT(*)::int AS votos_brutos,
                 COALESCE(SUM(COALESCE(qp.peso_amostral, 1.0)), 0)::float AS votos_ponderados
-            FROM public.respostas r
-            JOIN public.questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            LEFT JOIN public.cenarios_pesquisa cp ON cp.id_cenario = r.id_cenario
-            LEFT JOIN public.candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            FROM public.campo_respostas r
+            JOIN public.campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN public.pesq_cenarios_pesquisa cp ON cp.id_cenario = r.id_cenario
+            LEFT JOIN public.pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
             WHERE qp.id_pesquisa = :pid
               AND qp.status_auditoria = 'aprovada'
               AND r.tipo_registro = 'voto_direto'
@@ -429,9 +432,9 @@ async def obter_tabulacao_ponderada(
                 COALESCE(c.nome_urna_comercial, 'Não rejeita / Não sabe') AS candidato,
                 COUNT(*)::int AS votos_brutos,
                 COALESCE(SUM(COALESCE(qp.peso_amostral, 1.0)), 0)::float AS votos_ponderados
-            FROM public.respostas r
-            JOIN public.questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            LEFT JOIN public.candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            FROM public.campo_respostas r
+            JOIN public.campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN public.pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
             WHERE qp.id_pesquisa = :pid
               AND qp.status_auditoria = 'aprovada'
               AND r.tipo_registro = 'rejeicao'
@@ -504,10 +507,10 @@ async def obter_tabulacao_ponderada(
                 COALESCE(c.nome_urna_comercial, 'Branco / Nulo / Não sabe') AS candidato,
                 COUNT(*)::int AS votos_brutos,
                 COALESCE(SUM(COALESCE(qp.peso_amostral, 1.0)), 0)::float AS votos_ponderados
-            FROM public.respostas r
-            JOIN public.questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            JOIN public.pessoas p ON p.id_pessoa = qp.id_pessoa
-            LEFT JOIN public.candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            FROM public.campo_respostas r
+            JOIN public.campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            JOIN public.campo_pessoas p ON p.id_pessoa = qp.id_pessoa
+            LEFT JOIN public.pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
             WHERE qp.id_pesquisa = :pid
               AND qp.status_auditoria = 'aprovada'
               AND r.tipo_registro = 'voto_direto'

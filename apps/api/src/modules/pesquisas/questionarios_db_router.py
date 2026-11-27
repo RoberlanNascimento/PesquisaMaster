@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 from src.services.gcs import get_gcs_service
 
 questionarios_db_router = APIRouter(
@@ -143,16 +144,20 @@ class CandidatoProdutoCreate(BaseModel):
 @questionarios_db_router.get("/resumo")
 async def get_questionarios_resumo(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     pesquisas = (
         await session.execute(
-            text("SELECT id_pesquisa, nome, status::text FROM public.pesquisas ORDER BY id_pesquisa DESC")
+            text("SELECT id_pesquisa, nome, status::text FROM public.pesq_pesquisas WHERE id_organizacao = :tid ORDER BY id_pesquisa DESC"),
+            {"tid": tid},
         )
     ).mappings().all()
 
     grupos = (
         await session.execute(
-            text("SELECT * FROM public.perguntas_grupos_opcoes ORDER BY id_grupo_opcao ASC")
+            text("SELECT * FROM public.form_perguntas_grupos_opcoes WHERE id_organizacao = :tid ORDER BY id_grupo_opcao ASC"),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -161,11 +166,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT o.*, g.nome_grupo
-                FROM public.opcoes_resposta o
-                LEFT JOIN public.perguntas_grupos_opcoes g ON g.id_grupo_opcao = o.id_grupo_opcao
+                FROM public.form_opcoes_resposta o
+                LEFT JOIN public.form_perguntas_grupos_opcoes g ON g.id_grupo_opcao = o.id_grupo_opcao
+                WHERE o.id_organizacao = :tid
                 ORDER BY o.id_grupo_opcao ASC, o.id_opcao ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -174,11 +181,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT p.*, g.nome_grupo, g.tipo_escala
-                FROM public.perguntas p
-                LEFT JOIN public.perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
+                FROM public.form_perguntas p
+                LEFT JOIN public.form_perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
+                WHERE p.id_organizacao = :tid
                 ORDER BY p.id_pergunta ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -187,11 +196,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT ib.*, ib.descricao_item AS rotulo_item, p.enunciado AS pergunta_enunciado
-                FROM public.perguntas_itens_bateria ib
-                LEFT JOIN public.perguntas p ON p.id_pergunta = ib.id_pergunta
+                FROM public.form_perguntas_itens_bateria ib
+                LEFT JOIN public.form_perguntas p ON p.id_pergunta = ib.id_pergunta
+                WHERE ib.id_organizacao = :tid
                 ORDER BY ib.id_pergunta ASC, ib.ordem ASC, ib.id_item_bateria ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -200,11 +211,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT q.*, pe.nome AS pesquisa_nome
-                FROM public.questionarios q
-                LEFT JOIN public.pesquisas pe ON pe.id_pesquisa = q.id_pesquisa
+                FROM public.form_questionarios q
+                LEFT JOIN public.pesq_pesquisas pe ON pe.id_pesquisa = q.id_pesquisa
+                WHERE q.id_organizacao = :tid
                 ORDER BY q.id_questionario DESC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -215,14 +228,16 @@ async def get_questionarios_resumo(
                 SELECT qp.*, p.enunciado, p.tipo_questao, p.id_grupo_opcao,
                        g.nome_grupo, g.tipo_escala, u.nome AS usuario_nome,
                        cp.identificador AS cenario_identificador, cp.tipo_cenario AS cenario_tipo
-                FROM public.questionario_perguntas qp
-                LEFT JOIN public.perguntas p ON p.id_pergunta = qp.id_pergunta
-                LEFT JOIN public.perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
-                LEFT JOIN public.usuarios u ON u.id_usuario = qp.id_usuario
-                LEFT JOIN public.cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
+                FROM public.form_questionario_perguntas qp
+                LEFT JOIN public.form_perguntas p ON p.id_pergunta = qp.id_pergunta
+                LEFT JOIN public.form_perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
+                LEFT JOIN public.sys_usuarios u ON u.id_usuario = qp.id_usuario
+                LEFT JOIN public.pesq_cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
+                WHERE qp.id_organizacao = :tid
                 ORDER BY qp.id_questionario ASC, COALESCE(qp.id_cenario, 999999) ASC, qp.ordem ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -231,11 +246,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT c.*, pe.nome AS pesquisa_nome
-                FROM public.cenarios_pesquisa c
-                LEFT JOIN public.pesquisas pe ON pe.id_pesquisa = c.id_pesquisa
+                FROM public.pesq_cenarios_pesquisa c
+                LEFT JOIN public.pesq_pesquisas pe ON pe.id_pesquisa = c.id_pesquisa
+                WHERE c.id_organizacao = :tid
                 ORDER BY c.id_pesquisa DESC, c.id_cenario ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -244,10 +261,12 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT *
-                FROM public.candidatos_produtos
+                FROM public.pesq_candidatos_produtos
+                WHERE id_organizacao = :tid
                 ORDER BY id_candidato_produto ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -256,11 +275,13 @@ async def get_questionarios_resumo(
             text(
                 """
                 SELECT cc.*, cp.nome_urna_comercial, cp.sigla_partido_marca, cp.cargo_categoria, cp.foto_url
-                FROM public.cenario_candidatos cc
-                LEFT JOIN public.candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
+                FROM public.pesq_cenario_candidatos cc
+                LEFT JOIN public.pesq_candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
+                WHERE cc.id_organizacao = :tid
                 ORDER BY cc.id_cenario ASC, cc.ordem_apresentacao ASC
                 """
-            )
+            ),
+            {"tid": tid},
         )
     ).mappings().all()
 
@@ -302,16 +323,21 @@ async def get_questionarios_resumo(
 async def create_grupo_opcao(
     payload: GrupoOpcaoCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     res = await session.execute(
         text(
             """
-            INSERT INTO public.perguntas_grupos_opcoes (nome_grupo, tipo_escala, id_organizacao)
-            VALUES (:nome_grupo, :tipo_escala, 1)
+            INSERT INTO public.form_perguntas_grupos_opcoes (nome_grupo, tipo_escala, id_organizacao)
+            VALUES (:nome_grupo, :tipo_escala, :tid)
             RETURNING *
             """
         ),
-        {"nome_grupo": payload.nome_grupo.strip(), "tipo_escala": payload.tipo_escala.strip()},
+        {
+            "nome_grupo": payload.nome_grupo.strip(),
+            "tipo_escala": payload.tipo_escala.strip(),
+            "tid": tenant.tenant_id,
+        },
     )
     await session.commit()
     return dict(res.mappings().first() or {})
@@ -332,7 +358,7 @@ async def update_grupo_opcao(
     res = await session.execute(
         text(
             """
-            UPDATE public.perguntas_grupos_opcoes
+            UPDATE public.form_perguntas_grupos_opcoes
             SET nome_grupo = :nome_grupo,
                 tipo_escala = :tipo_escala
             WHERE id_grupo_opcao = :id
@@ -362,7 +388,7 @@ async def delete_grupo_opcao(
 ) -> None:
     try:
         await session.execute(
-            text("DELETE FROM public.perguntas_grupos_opcoes WHERE id_grupo_opcao = :id"),
+            text("DELETE FROM public.form_perguntas_grupos_opcoes WHERE id_grupo_opcao = :id"),
             {"id": id_grupo_opcao},
         )
         await session.commit()
@@ -378,14 +404,15 @@ async def delete_grupo_opcao(
 async def create_opcao_resposta(
     payload: OpcaoRespostaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     codigo_valor = payload.codigo_valor if payload.codigo_valor is not None else payload.valor_numerico
     ordem_exibicao = payload.ordem_exibicao if payload.ordem_exibicao is not None else (payload.ordem or 1)
     res = await session.execute(
         text(
             """
-            INSERT INTO public.opcoes_resposta (id_grupo_opcao, rotulo, codigo_valor, ordem_exibicao, id_organizacao)
-            VALUES (:id_grupo_opcao, :rotulo, :codigo_valor, :ordem_exibicao, 1)
+            INSERT INTO public.form_opcoes_resposta (id_grupo_opcao, rotulo, codigo_valor, ordem_exibicao, id_organizacao)
+            VALUES (:id_grupo_opcao, :rotulo, :codigo_valor, :ordem_exibicao, :tid)
             RETURNING *
             """
         ),
@@ -394,6 +421,7 @@ async def create_opcao_resposta(
             "rotulo": payload.rotulo.strip(),
             "codigo_valor": codigo_valor,
             "ordem_exibicao": ordem_exibicao,
+            "tid": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -417,7 +445,7 @@ async def update_opcao_resposta(
     res = await session.execute(
         text(
             """
-            UPDATE public.opcoes_resposta
+            UPDATE public.form_opcoes_resposta
             SET id_grupo_opcao = :id_grupo_opcao,
                 rotulo = :rotulo,
                 codigo_valor = :codigo_valor,
@@ -450,7 +478,7 @@ async def delete_opcao_resposta(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     await session.execute(
-        text("DELETE FROM public.opcoes_resposta WHERE id_opcao = :id"),
+        text("DELETE FROM public.form_opcoes_resposta WHERE id_opcao = :id"),
         {"id": id_opcao},
     )
     await session.commit()
@@ -459,6 +487,7 @@ async def delete_opcao_resposta(
 @questionarios_db_router.get("/perguntas")
 async def list_perguntas(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> list[dict[str, Any]]:
     res = await session.execute(
         text(
@@ -468,16 +497,18 @@ async def list_perguntas(
                 g.nome_grupo,
                 g.tipo_escala,
                 COALESCE(qp_cnt.total, 0) AS questionarios_vinculados
-            FROM public.perguntas p
-            LEFT JOIN public.perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
+            FROM public.form_perguntas p
+            LEFT JOIN public.form_perguntas_grupos_opcoes g ON g.id_grupo_opcao = p.id_grupo_opcao
             LEFT JOIN (
                 SELECT id_pergunta, COUNT(DISTINCT id_questionario)::int AS total
-                FROM public.questionario_perguntas
+                FROM public.form_questionario_perguntas
                 GROUP BY id_pergunta
             ) qp_cnt ON qp_cnt.id_pergunta = p.id_pergunta
+            WHERE p.id_organizacao = :tid
             ORDER BY p.id_pergunta ASC
             """
-        )
+        ),
+        {"tid": tenant.tenant_id},
     )
     return [dict(r) for r in res.mappings().all()]
 
@@ -513,6 +544,7 @@ def _normalize_tipo_questao(raw: str | None) -> str:
 async def create_pergunta(
     payload: PerguntaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     enunciado = payload.enunciado.strip()
     if not enunciado:
@@ -528,8 +560,8 @@ async def create_pergunta(
     res = await session.execute(
         text(
             """
-            INSERT INTO public.perguntas (identificador_tecnico, enunciado, tipo_questao, id_grupo_opcao, id_organizacao)
-            VALUES (:identificador_tecnico, :enunciado, :tipo_questao, :id_grupo_opcao, 1)
+            INSERT INTO public.form_perguntas (identificador_tecnico, enunciado, tipo_questao, id_grupo_opcao, id_organizacao)
+            VALUES (:identificador_tecnico, :enunciado, :tipo_questao, :id_grupo_opcao, :tid)
             RETURNING *
             """
         ),
@@ -538,6 +570,7 @@ async def create_pergunta(
             "enunciado": enunciado,
             "tipo_questao": tipo_questao,
             "id_grupo_opcao": payload.id_grupo_opcao,
+            "tid": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -550,7 +583,7 @@ async def _update_pergunta_impl(
     session: AsyncSession,
 ) -> dict[str, Any]:
     existing_res = await session.execute(
-        text("SELECT * FROM public.perguntas WHERE id_pergunta = :id"),
+        text("SELECT * FROM public.form_perguntas WHERE id_pergunta = :id"),
         {"id": id_pergunta},
     )
     existing = existing_res.mappings().first()
@@ -586,7 +619,7 @@ async def _update_pergunta_impl(
     res = await session.execute(
         text(
             """
-            UPDATE public.perguntas
+            UPDATE public.form_perguntas
             SET enunciado = :enunciado,
                 tipo_questao = :tipo_questao,
                 id_grupo_opcao = :id_grupo_opcao
@@ -632,7 +665,7 @@ async def delete_pergunta(
         text(
             """
             SELECT COUNT(DISTINCT id_questionario)::int
-            FROM public.questionario_perguntas
+            FROM public.form_questionario_perguntas
             WHERE id_pergunta = :id
             """
         ),
@@ -647,7 +680,7 @@ async def delete_pergunta(
 
     try:
         await session.execute(
-            text("DELETE FROM public.perguntas WHERE id_pergunta = :id"),
+            text("DELETE FROM public.form_perguntas WHERE id_pergunta = :id"),
             {"id": id_pergunta},
         )
         await session.commit()
@@ -669,6 +702,7 @@ async def delete_pergunta(
 async def create_item_bateria(
     payload: ItemBateriaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     descricao = (payload.descricao_item or payload.rotulo_item or "").strip()
     if not descricao:
@@ -679,8 +713,8 @@ async def create_item_bateria(
     res = await session.execute(
         text(
             """
-            INSERT INTO public.perguntas_itens_bateria (id_pergunta, descricao_item, ordem, id_organizacao)
-            VALUES (:id_pergunta, :descricao_item, :ordem, 1)
+            INSERT INTO public.form_perguntas_itens_bateria (id_pergunta, descricao_item, ordem, id_organizacao)
+            VALUES (:id_pergunta, :descricao_item, :ordem, :tid)
             RETURNING *, descricao_item AS rotulo_item
             """
         ),
@@ -688,6 +722,7 @@ async def create_item_bateria(
             "id_pergunta": payload.id_pergunta,
             "descricao_item": descricao,
             "ordem": payload.ordem,
+            "tid": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -709,7 +744,7 @@ async def update_item_bateria(
     res = await session.execute(
         text(
             """
-            UPDATE public.perguntas_itens_bateria
+            UPDATE public.form_perguntas_itens_bateria
             SET id_pergunta = :id_pergunta,
                 descricao_item = :descricao_item,
                 ordem = :ordem
@@ -741,7 +776,7 @@ async def patch_item_bateria(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     existing_res = await session.execute(
-        text("SELECT * FROM public.perguntas_itens_bateria WHERE id_item_bateria = :id"),
+        text("SELECT * FROM public.form_perguntas_itens_bateria WHERE id_item_bateria = :id"),
         {"id": id_item_bateria},
     )
     existing = existing_res.mappings().first()
@@ -775,7 +810,7 @@ async def patch_item_bateria(
     res = await session.execute(
         text(
             """
-            UPDATE public.perguntas_itens_bateria
+            UPDATE public.form_perguntas_itens_bateria
             SET id_pergunta = :id_pergunta,
                 descricao_item = :descricao_item,
                 ordem = :ordem
@@ -800,7 +835,7 @@ async def delete_item_bateria(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     await session.execute(
-        text("DELETE FROM public.perguntas_itens_bateria WHERE id_item_bateria = :id"),
+        text("DELETE FROM public.form_perguntas_itens_bateria WHERE id_item_bateria = :id"),
         {"id": id_item_bateria},
     )
     await session.commit()
@@ -811,12 +846,13 @@ async def delete_item_bateria(
 async def create_questionario(
     payload: QuestionarioCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     existing_q = await session.execute(
         text(
             """
             SELECT id_questionario
-            FROM public.questionarios
+            FROM public.form_questionarios
             WHERE id_pesquisa = :id_pesquisa
             LIMIT 1
             """
@@ -833,8 +869,8 @@ async def create_questionario(
         res = await session.execute(
             text(
                 """
-                INSERT INTO public.questionarios (id_pesquisa, titulo, codigo_versao, ativo, id_organizacao)
-                VALUES (:id_pesquisa, :titulo, :codigo_versao, :ativo, 1)
+                INSERT INTO public.form_questionarios (id_pesquisa, titulo, codigo_versao, ativo, id_organizacao)
+                VALUES (:id_pesquisa, :titulo, :codigo_versao, :ativo, :tid)
                 RETURNING *
                 """
             ),
@@ -843,6 +879,7 @@ async def create_questionario(
                 "titulo": payload.titulo.strip(),
                 "codigo_versao": payload.codigo_versao.strip() or "v1.0",
                 "ativo": payload.ativo,
+                "tid": tenant.tenant_id,
             },
         )
         await session.commit()
@@ -868,11 +905,11 @@ async def delete_questionario(
 ) -> None:
     try:
         await session.execute(
-            text("DELETE FROM public.questionario_perguntas WHERE id_questionario = :id"),
+            text("DELETE FROM public.form_questionario_perguntas WHERE id_questionario = :id"),
             {"id": id_questionario},
         )
         await session.execute(
-            text("DELETE FROM public.questionarios WHERE id_questionario = :id"),
+            text("DELETE FROM public.form_questionarios WHERE id_questionario = :id"),
             {"id": id_questionario},
         )
         await session.commit()
@@ -888,12 +925,13 @@ async def delete_questionario(
 async def create_questionario_pergunta(
     payload: QuestionarioPerguntaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     existing = await session.execute(
         text(
             """
             SELECT 1
-            FROM public.questionario_perguntas
+            FROM public.form_questionario_perguntas
             WHERE id_questionario = :id_questionario
               AND id_pergunta = :id_pergunta
               AND COALESCE(id_cenario, 0) = COALESCE(:id_cenario, 0)
@@ -912,9 +950,9 @@ async def create_questionario_pergunta(
             detail="Esta pergunta já está vinculada a este questionário neste cenário.",
         )
 
-    uid = payload.id_usuario
+    uid = payload.id_usuario or tenant.user_id
     if uid is None:
-        u_res = await session.execute(text("SELECT id_usuario FROM public.usuarios ORDER BY id_usuario ASC LIMIT 1"))
+        u_res = await session.execute(text("SELECT id_usuario FROM public.sys_usuarios ORDER BY id_usuario ASC LIMIT 1"))
         uid = u_res.scalar_one_or_none()
 
     ordem_final = payload.ordem
@@ -922,7 +960,7 @@ async def create_questionario_pergunta(
         text(
             """
             SELECT 1
-            FROM public.questionario_perguntas
+            FROM public.form_questionario_perguntas
             WHERE id_questionario = :id_questionario
               AND ordem = :ordem
             LIMIT 1
@@ -933,7 +971,7 @@ async def create_questionario_pergunta(
     if ordem_exists.scalar_one_or_none() is not None:
         max_res = await session.execute(
             text(
-                "SELECT COALESCE(MAX(ordem), 0)::int + 1 FROM public.questionario_perguntas WHERE id_questionario = :id_questionario"
+                "SELECT COALESCE(MAX(ordem), 0)::int + 1 FROM public.form_questionario_perguntas WHERE id_questionario = :id_questionario"
             ),
             {"id_questionario": payload.id_questionario},
         )
@@ -945,11 +983,11 @@ async def create_questionario_pergunta(
         res = await session.execute(
             text(
                 """
-                INSERT INTO public.questionario_perguntas (
+                INSERT INTO public.form_questionario_perguntas (
                     id_questionario, id_pergunta, id_cenario, ordem, secao_bloco, obrigatoria, id_usuario, id_organizacao
                 )
                 VALUES (
-                    :id_questionario, :id_pergunta, :id_cenario, :ordem, :secao_bloco, :obrigatoria, :id_usuario, 1
+                    :id_questionario, :id_pergunta, :id_cenario, :ordem, :secao_bloco, :obrigatoria, :id_usuario, :tid
                 )
                 RETURNING *
                 """
@@ -962,6 +1000,7 @@ async def create_questionario_pergunta(
                 "secao_bloco": secao_bloco,
                 "obrigatoria": payload.obrigatoria,
                 "id_usuario": uid,
+                "tid": tenant.tenant_id,
             },
         )
         await session.commit()
@@ -991,7 +1030,7 @@ async def update_questionario_pergunta(
         text(
             """
             SELECT *
-            FROM public.questionario_perguntas
+            FROM public.form_questionario_perguntas
             WHERE id_questionario_pergunta = :id
             """
         ),
@@ -1021,7 +1060,7 @@ async def update_questionario_pergunta(
             text(
                 """
                 SELECT 1
-                FROM public.questionario_perguntas
+                FROM public.form_questionario_perguntas
                 WHERE id_questionario = :id_questionario
                   AND id_pergunta = :id_pergunta
                   AND COALESCE(id_cenario, 0) = COALESCE(:id_cenario, 0)
@@ -1046,7 +1085,7 @@ async def update_questionario_pergunta(
         res = await session.execute(
             text(
                 """
-                UPDATE public.questionario_perguntas
+                UPDATE public.form_questionario_perguntas
                 SET id_cenario = :id_cenario,
                     ordem = :ordem,
                     obrigatoria = :obrigatoria,
@@ -1089,7 +1128,7 @@ async def create_entrevista(
         text(
             """
             SELECT id_pesquisa, is_bloqueada, COALESCE(id_organizacao, 1) AS id_organizacao
-            FROM public.pesquisas
+            FROM public.pesq_pesquisas
             WHERE id_pesquisa = :id_pesquisa
             """
         ),
@@ -1111,7 +1150,7 @@ async def create_entrevista(
         text(
             """
             SELECT id_questionario
-            FROM public.questionarios
+            FROM public.form_questionarios
             WHERE id_questionario = :id_questionario
               AND id_pesquisa = :id_pesquisa
             """
@@ -1134,7 +1173,7 @@ async def create_entrevista(
         text(
             """
             SELECT id_questionario_pergunta, id_cenario
-            FROM public.questionario_perguntas
+            FROM public.form_questionario_perguntas
             WHERE id_questionario = :id_questionario
             """
         ),
@@ -1149,7 +1188,7 @@ async def create_entrevista(
         pessoa_res = await session.execute(
             text(
                 """
-                INSERT INTO public.pessoas (
+                INSERT INTO public.campo_pessoas (
                     nome, sexo, faixa_etaria, escolaridade, faixa_renda,
                     bairro_distrito, regiao_geografica, id_organizacao
                 )
@@ -1167,7 +1206,7 @@ async def create_entrevista(
         qp_pessoa_res = await session.execute(
             text(
                 """
-                INSERT INTO public.questionarios_pessoas (
+                INSERT INTO public.campo_questionarios_pessoas (
                     id_questionario, id_pesquisa, id_pessoa, id_pesquisador,
                     peso_amostral, status_auditoria, id_organizacao
                 )
@@ -1212,7 +1251,7 @@ async def create_entrevista(
             await session.execute(
                 text(
                     """
-                    INSERT INTO public.respostas (
+                    INSERT INTO public.campo_respostas (
                         id_questionario_pessoa, id_questionario_pergunta,
                         id_opcao, id_candidato_produto, id_item_bateria, id_cenario,
                         tipo_registro, codigo_especial, valor_texto, id_organizacao
@@ -1262,7 +1301,7 @@ async def delete_questionario_pergunta(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     await session.execute(
-        text("DELETE FROM public.questionario_perguntas WHERE id_questionario_pergunta = :id"),
+        text("DELETE FROM public.form_questionario_perguntas WHERE id_questionario_pergunta = :id"),
         {"id": id_qp},
     )
     await session.commit()
@@ -1272,12 +1311,13 @@ async def delete_questionario_pergunta(
 async def create_cenario_pesquisa(
     payload: CenarioPesquisaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     res = await session.execute(
         text(
             """
-            INSERT INTO public.cenarios_pesquisa (id_pesquisa, identificador, tipo_cenario, ativo, id_organizacao)
-            VALUES (:id_pesquisa, :identificador, :tipo_cenario, :ativo, 1)
+            INSERT INTO public.pesq_cenarios_pesquisa (id_pesquisa, identificador, tipo_cenario, ativo, id_organizacao)
+            VALUES (:id_pesquisa, :identificador, :tipo_cenario, :ativo, :tid)
             RETURNING *
             """
         ),
@@ -1286,6 +1326,7 @@ async def create_cenario_pesquisa(
             "identificador": payload.identificador.strip(),
             "tipo_cenario": payload.tipo_cenario.strip(),
             "ativo": payload.ativo,
+            "tid": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -1299,7 +1340,7 @@ async def delete_cenario_pesquisa(
 ) -> None:
     try:
         await session.execute(
-            text("DELETE FROM public.cenarios_pesquisa WHERE id_cenario = :id"),
+            text("DELETE FROM public.pesq_cenarios_pesquisa WHERE id_cenario = :id"),
             {"id": id_cenario},
         )
         await session.commit()
@@ -1314,15 +1355,18 @@ async def delete_cenario_pesquisa(
 @questionarios_db_router.get("/candidatos")
 async def list_candidatos_produtos(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> list[dict[str, Any]]:
     res = await session.execute(
         text(
             """
             SELECT *
-            FROM public.candidatos_produtos
+            FROM public.pesq_candidatos_produtos
+            WHERE id_organizacao = :tid
             ORDER BY id_candidato_produto ASC
             """
-        )
+        ),
+        {"tid": tenant.tenant_id},
     )
     rows = [dict(r) for r in res.mappings().all()]
     for row in rows:
@@ -1350,7 +1394,7 @@ async def get_candidato_foto(
 ) -> Response:
     res = await session.execute(
         text(
-            "SELECT foto_url FROM public.candidatos_produtos WHERE id_candidato_produto = :id"
+            "SELECT foto_url FROM public.pesq_candidatos_produtos WHERE id_candidato_produto = :id"
         ),
         {"id": id_candidato_produto},
     )
@@ -1377,6 +1421,7 @@ async def get_candidato_foto(
 async def create_candidato_produto(
     payload: CandidatoProdutoCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     nome_urna = payload.nome_urna_comercial.strip()
     if not nome_urna:
@@ -1391,7 +1436,7 @@ async def create_candidato_produto(
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'candidatos_produtos'
+              AND table_name = 'pesq_candidatos_produtos'
             """
         )
     )
@@ -1443,12 +1488,13 @@ async def create_candidato_produto(
         params["foto_url"] = payload.foto_url.strip()
     if has_org:
         cols.append("id_organizacao")
-        vals.append("1")
+        vals.append(":tid")
+        params["tid"] = tenant.tenant_id
 
     res = await session.execute(
         text(
             f"""
-            INSERT INTO public.candidatos_produtos ({", ".join(cols)})
+            INSERT INTO public.pesq_candidatos_produtos ({", ".join(cols)})
             VALUES ({", ".join(vals)})
             RETURNING *
             """
@@ -1518,7 +1564,7 @@ async def upload_candidato_foto(
                 SELECT column_name
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name = 'candidatos_produtos'
+                  AND table_name = 'pesq_candidatos_produtos'
                 """
             )
         )
@@ -1535,7 +1581,7 @@ async def upload_candidato_foto(
         if photo_col is not None:
             old_res = await session.execute(
                 text(
-                    f"SELECT {photo_col} FROM public.candidatos_produtos WHERE id_candidato_produto = :id"
+                    f"SELECT {photo_col} FROM public.pesq_candidatos_produtos WHERE id_candidato_produto = :id"
                 ),
                 {"id": id_candidato_produto},
             )
@@ -1543,7 +1589,7 @@ async def upload_candidato_foto(
 
             await session.execute(
                 text(
-                    f"UPDATE public.candidatos_produtos SET {photo_col} = :foto_url WHERE id_candidato_produto = :id"
+                    f"UPDATE public.pesq_candidatos_produtos SET {photo_col} = :foto_url WHERE id_candidato_produto = :id"
                 ),
                 {"foto_url": foto_url, "id": id_candidato_produto},
             )
@@ -1580,7 +1626,7 @@ async def update_candidato_produto(
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'candidatos_produtos'
+              AND table_name = 'pesq_candidatos_produtos'
             """
         )
     )
@@ -1626,7 +1672,7 @@ async def update_candidato_produto(
     res = await session.execute(
         text(
             f"""
-            UPDATE public.candidatos_produtos
+            UPDATE public.pesq_candidatos_produtos
             SET {", ".join(set_clauses)}
             WHERE id_candidato_produto = :id
             RETURNING *
@@ -1651,7 +1697,7 @@ async def delete_candidato_produto(
 ) -> None:
     try:
         await session.execute(
-            text("DELETE FROM public.candidatos_produtos WHERE id_candidato_produto = :id"),
+            text("DELETE FROM public.pesq_candidatos_produtos WHERE id_candidato_produto = :id"),
             {"id": id_candidato_produto},
         )
         await session.commit()
@@ -1673,8 +1719,8 @@ async def list_cenario_candidatos(
             text(
                 """
                 SELECT cc.*, cp.nome_urna_comercial, cp.sigla_partido_marca, cp.cargo_categoria
-                FROM public.cenario_candidatos cc
-                LEFT JOIN public.candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
+                FROM public.pesq_cenario_candidatos cc
+                LEFT JOIN public.pesq_candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
                 WHERE cc.id_cenario = :id_cenario
                 ORDER BY cc.ordem_apresentacao ASC
                 """
@@ -1686,8 +1732,8 @@ async def list_cenario_candidatos(
             text(
                 """
                 SELECT cc.*, cp.nome_urna_comercial, cp.sigla_partido_marca, cp.cargo_categoria
-                FROM public.cenario_candidatos cc
-                LEFT JOIN public.candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
+                FROM public.pesq_cenario_candidatos cc
+                LEFT JOIN public.pesq_candidatos_produtos cp ON cp.id_candidato_produto = cc.id_candidato_produto
                 ORDER BY cc.id_cenario ASC, cc.ordem_apresentacao ASC
                 """
             )
@@ -1699,12 +1745,13 @@ async def list_cenario_candidatos(
 async def create_cenario_candidato(
     payload: CenarioCandidatoCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     existing = await session.execute(
         text(
             """
             SELECT 1
-            FROM public.cenario_candidatos
+            FROM public.pesq_cenario_candidatos
             WHERE id_cenario = :id_cenario
               AND id_candidato_produto = :id_candidato_produto
             LIMIT 1
@@ -1727,7 +1774,7 @@ async def create_cenario_candidato(
             SELECT 1
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'cenario_candidatos'
+              AND table_name = 'pesq_cenario_candidatos'
               AND column_name = 'id_organizacao'
             LIMIT 1
             """
@@ -1737,13 +1784,13 @@ async def create_cenario_candidato(
 
     insert_sql = (
         """
-        INSERT INTO public.cenario_candidatos (id_cenario, id_candidato_produto, ordem_apresentacao, id_organizacao)
-        VALUES (:id_cenario, :id_candidato_produto, :ordem_apresentacao, 1)
+        INSERT INTO public.pesq_cenario_candidatos (id_cenario, id_candidato_produto, ordem_apresentacao, id_organizacao)
+        VALUES (:id_cenario, :id_candidato_produto, :ordem_apresentacao, :tid)
         RETURNING *
         """
         if has_org
         else """
-        INSERT INTO public.cenario_candidatos (id_cenario, id_candidato_produto, ordem_apresentacao)
+        INSERT INTO public.pesq_cenario_candidatos (id_cenario, id_candidato_produto, ordem_apresentacao)
         VALUES (:id_cenario, :id_candidato_produto, :ordem_apresentacao)
         RETURNING *
         """
@@ -1756,6 +1803,7 @@ async def create_cenario_candidato(
                 "id_cenario": payload.id_cenario,
                 "id_candidato_produto": payload.id_candidato_produto,
                 "ordem_apresentacao": payload.ordem_apresentacao,
+                "tid": tenant.tenant_id,
             },
         )
         await session.commit()
@@ -1787,7 +1835,7 @@ async def delete_cenario_candidato(
     await session.execute(
         text(
             """
-            DELETE FROM public.cenario_candidatos
+            DELETE FROM public.pesq_cenario_candidatos
             WHERE id_cenario = :id_cenario
               AND id_candidato_produto = :id_candidato_produto
             """

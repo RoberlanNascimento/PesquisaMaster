@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import type {
   WorkspaceTab,
   WorkspaceKpi,
@@ -5,6 +6,67 @@ import type {
   WorkspaceColumn,
 } from "../../components/ui/EnterpriseCrudWorkspaceTypes";
 import type { UserAccountRecord } from "./usersRbacData";
+
+function getInitials(name: string): string {
+  const parts = name.replace(/^(Dr\.|Dra\.|Prof\.|Sr\.|Sra\.)\s+/i, "").trim().split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? "";
+  if (!first) return "US";
+  if (parts.length === 1) return first.slice(0, 2).toUpperCase();
+  const last = parts[parts.length - 1] ?? "";
+  return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
+
+function UserRowAvatar({
+  fullName,
+  photoUrl,
+}: {
+  readonly fullName: string;
+  readonly photoUrl?: string | null;
+}): React.JSX.Element {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoUrl]);
+
+  return (
+    <span
+      data-testid="user-row-avatar"
+      style={{
+        width: "96px",
+        height: "96px",
+        borderRadius: "50%",
+        overflow: "hidden",
+        flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
+        border: "2px solid #475569",
+        color: "#f8fafc",
+        fontSize: "26px",
+        fontWeight: 700,
+      }}
+    >
+      {photoUrl && !imgFailed ? (
+        <img
+          src={photoUrl}
+          alt={fullName}
+          onError={() => setImgFailed(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "50%",
+            display: "block",
+          }}
+        />
+      ) : (
+        getInitials(fullName)
+      )}
+    </span>
+  );
+}
 
 export function getUserTabs(users: readonly UserAccountRecord[]): readonly WorkspaceTab[] {
   return [
@@ -86,9 +148,12 @@ export const USER_COLUMNS: readonly WorkspaceColumn<UserAccountRecord>[] = [
     key: "fullName",
     header: "Usuário & E-mail",
     render: (u) => (
-      <div>
-        <strong>{u.fullName}</strong>
-        <div style={{ fontSize: "11px", color: "#64748b" }}>{u.email}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <UserRowAvatar fullName={u.fullName} photoUrl={u.photoUrl} />
+        <div style={{ minWidth: 0 }}>
+          <strong>{u.fullName}</strong>
+          <div style={{ fontSize: "11px", color: "#64748b" }}>{u.email}</div>
+        </div>
       </div>
     ),
   },

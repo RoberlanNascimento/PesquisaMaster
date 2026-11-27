@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./nocturne-theme.css";
 import { App } from "./App";
+import { installAuthFetchInterceptor } from "./lib/authFetchInterceptor";
 
 if (
   typeof window !== "undefined" &&
@@ -22,6 +23,8 @@ if (
     return originalFetch(input, init);
   };
 }
+
+installAuthFetchInterceptor();
 
 const rootElement = document.getElementById("root");
 if (rootElement) {

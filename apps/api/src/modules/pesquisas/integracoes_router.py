@@ -240,8 +240,8 @@ async def conferir_e_sincronizar_municipio(
             SELECT m.id_municipio, m.nome, m.codigo_ibge, m.codigo_tse,
                    m.eleitorado_total AS eleitorado_atual_db,
                    e.sigla AS uf
-            FROM public.municipios m
-            JOIN public.estados e ON m.id_estado = e.id_estado
+            FROM public.geo_municipios m
+            JOIN public.geo_estados e ON m.id_estado = e.id_estado
             WHERE m.id_municipio = :mid
             """
         ),
@@ -267,7 +267,7 @@ async def conferir_e_sincronizar_municipio(
     resolved_org_id: Optional[int] = None
     if payload and payload.id_usuario:
         u_res = await session.execute(
-            text("SELECT id_usuario, id_organizacao FROM public.usuarios WHERE id_usuario = :uid LIMIT 1"),
+            text("SELECT id_usuario, id_organizacao FROM public.sys_usuarios WHERE id_usuario = :uid LIMIT 1"),
             {"uid": payload.id_usuario},
         )
         u_row = u_res.mappings().first()
@@ -277,7 +277,7 @@ async def conferir_e_sincronizar_municipio(
 
     if resolved_user_id is None and payload and payload.email_usuario:
         u_res = await session.execute(
-            text("SELECT id_usuario, id_organizacao FROM public.usuarios WHERE LOWER(email) = LOWER(:email) LIMIT 1"),
+            text("SELECT id_usuario, id_organizacao FROM public.sys_usuarios WHERE LOWER(email) = LOWER(:email) LIMIT 1"),
             {"email": payload.email_usuario.strip()},
         )
         u_row = u_res.mappings().first()
@@ -287,7 +287,7 @@ async def conferir_e_sincronizar_municipio(
 
     if resolved_user_id is None:
         u_res = await session.execute(
-            text("SELECT id_usuario, id_organizacao FROM public.usuarios ORDER BY id_usuario ASC LIMIT 1")
+            text("SELECT id_usuario, id_organizacao FROM public.sys_usuarios ORDER BY id_usuario ASC LIMIT 1")
         )
         u_row = u_res.mappings().first()
         if u_row:
@@ -307,7 +307,7 @@ async def conferir_e_sincronizar_municipio(
         ins_res = await session.execute(
             text(
                 """
-                INSERT INTO public.eleitorado_tse (
+                INSERT INTO public.geo_eleitorado_tse (
                     id_municipio, id_bairro, ano_referencia, mes_referencia,
                     quantidade_eleitores, eleitores_biometria, populacao_ibge, ano_censo_ibge,
                     tipo_captura, fonte_endpoint, id_usuario_captura,
@@ -340,7 +340,7 @@ async def conferir_e_sincronizar_municipio(
         await session.execute(
             text(
                 """
-                UPDATE public.municipios
+                UPDATE public.geo_municipios
                 SET eleitorado_total = :eleitores,
                     populacao_total = :pop_ibge,
                     codigo_tse = COALESCE(:cod_tse, codigo_tse)
@@ -412,13 +412,13 @@ async def listar_historico_tse_ibge(
                    m.codigo_ibge, m.codigo_tse,
                    b.nome_bairro, u.nome AS usuario_nome,
                    o.nome_fantasia AS organizacao_nome,
-                   (SELECT COUNT(*) FROM public.amostras a WHERE a.id_eleitorado_tse = et.id_eleitorado_tse) AS amostras_vinculadas
-            FROM public.eleitorado_tse et
-            JOIN public.municipios m ON m.id_municipio = et.id_municipio
-            JOIN public.estados e ON e.id_estado = m.id_estado
-            LEFT JOIN public.bairros_ibge b ON b.id_bairro = et.id_bairro
-            LEFT JOIN public.usuarios u ON u.id_usuario = et.id_usuario_captura
-            LEFT JOIN public.organizacoes o ON o.id_organizacao = et.id_organizacao
+                   (SELECT COUNT(*) FROM public.pesq_amostras a WHERE a.id_eleitorado_tse = et.id_eleitorado_tse) AS amostras_vinculadas
+            FROM public.geo_eleitorado_tse et
+            JOIN public.geo_municipios m ON m.id_municipio = et.id_municipio
+            JOIN public.geo_estados e ON e.id_estado = m.id_estado
+            LEFT JOIN public.geo_bairros_ibge b ON b.id_bairro = et.id_bairro
+            LEFT JOIN public.sys_usuarios u ON u.id_usuario = et.id_usuario_captura
+            LEFT JOIN public.sys_organizacoes o ON o.id_organizacao = et.id_organizacao
             WHERE {where_clause}
             ORDER BY et.ano_referencia DESC, et.mes_referencia DESC, et.data_captura DESC, et.id_eleitorado_tse DESC
             """

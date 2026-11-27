@@ -52,7 +52,15 @@ O **PesquisaMaster** é uma plataforma completa de inteligência eleitoral, gest
       - Respostas: Tabela fato atômica que persiste cada escolha, voto ou avaliação individual fornecida pelo respondente.
       - Relatorios_Tabulacao: Salva as configurações de cruzamentos estatísticos (crosstabs) e filtros personalizados para emissão de relatórios.  
 
-## 3. Requisitos Não-Funcionais Inegociáveis
+## 3. Padronização Física de Prefixos de Tabelas (PostgreSQL `public`)
+As tabelas físicas do banco PostgreSQL `pesquisas` são padronizadas em **5 grupos de prefixos de domínio** (com isolamento multi-tenant via `id_organizacao`):
+- **`sys_*` (Sistema, Multi-Tenant, RBAC & Auditoria):** `sys_organizacoes`, `sys_usuarios`, `sys_sessoes_refresh_tokens`, `sys_logs_autenticacao`, `sys_papeis_rbac`, `sys_permissoes_rbac`, `sys_papel_permissoes`, `sys_historico_desbloqueio_pesquisas`.
+- **`geo_*` (Geografia, Censo IBGE & Eleitorado TSE):** `geo_estados`, `geo_municipios`, `geo_regiao_zonas`, `geo_bairros_ibge`, `geo_demografia_ibge`, `geo_eleitorado_tse`.
+- **`form_*` (Formulários, Perguntas, Escalas & Baterias):** `form_questionarios`, `form_perguntas`, `form_questionario_perguntas`, `form_perguntas_grupos_opcoes`, `form_opcoes_resposta`, `form_perguntas_itens_bateria`.
+- **`pesq_*` (Pesquisas, Amostras, Cotas, Cenários & Tabulação):** `pesq_pesquisas`, `pesq_amostras`, `pesq_amostras_dimensao`, `pesq_amostras_cotas`, `pesq_cenarios_pesquisa`, `pesq_candidatos_produtos`, `pesq_cenario_candidatos`, `pesq_relatorios_tabulacao`.
+- **`campo_*` (Equipe de Campo, Atribuições & Coleta):** `campo_profissionais`, `campo_atribuicao_pesquisadores`, `campo_transferencias_atribuicao`, `campo_historico_reatribuicao_questionarios`, `campo_pessoas`, `campo_questionarios_pessoas`, `campo_respostas`.
+
+## 4. Requisitos Não-Funcionais Inegociáveis
 - **Precisão Numérica:** Proibido usar ponto flutuante binário (`float`) para cálculos estatísticos, pesos amostrais, percentuais de cotas ou valores financeiros — uso obrigatório de `NUMERIC(19, 4)` no PostgreSQL e `Decimal` no Python.
 - **Integridade Transacional e Concorrência:** Operações críticas de alocação de cotas e sincronização em lote utilizam controle transacional estrito, `SELECT ... FOR UPDATE` e chave de idempotência.
 - **Observabilidade e Padrão de Erros:** Respostas de erro seguem RFC 7807 (`Problem Details`) com `correlation_id` propagado em logs estruturados JSON (`structlog`).

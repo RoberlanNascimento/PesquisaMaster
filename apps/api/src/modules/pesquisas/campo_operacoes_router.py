@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 
 campo_operacoes_router = APIRouter(
     prefix="/api/v1/campo-operacoes",
@@ -53,18 +54,21 @@ class ReatribuicaoCreateSchema(BaseModel):
 @campo_operacoes_router.get("/dashboard-stats")
 async def get_dashboard_stats(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     res = await session.execute(
         text(
             """
             SELECT
-                (SELECT COUNT(*)::int FROM pesquisas) AS total_pesquisas,
-                (SELECT COUNT(*)::int FROM municipios) AS total_cidades,
-                (SELECT COALESCE(SUM(COALESCE(NULLIF(populacao_total, 0), eleitorado_total, 0)), 0)::bigint FROM municipios) AS populacao_municipios,
-                (SELECT COUNT(*)::int FROM questionarios_pessoas) AS entrevistas_realizadas,
-                (SELECT COALESCE(SUM(tamanho_amostral), 0)::int FROM amostras) AS entrevistas_planejadas
+                (SELECT COUNT(*)::int FROM pesq_pesquisas WHERE id_organizacao = :tid) AS total_pesquisas,
+                (SELECT COUNT(*)::int FROM geo_municipios) AS total_cidades,
+                (SELECT COALESCE(SUM(COALESCE(NULLIF(populacao_total, 0), eleitorado_total, 0)), 0)::bigint FROM geo_municipios) AS populacao_municipios,
+                (SELECT COUNT(*)::int FROM campo_questionarios_pessoas WHERE id_organizacao = :tid) AS entrevistas_realizadas,
+                (SELECT COALESCE(SUM(tamanho_amostral), 0)::int FROM pesq_amostras WHERE id_organizacao = :tid) AS entrevistas_planejadas
             """
-        )
+        ),
+        {"tid": tid},
     )
     row = res.mappings().first() or {}
     realizadas = int(row.get("entrevistas_realizadas") or 0)
@@ -77,13 +81,15 @@ async def get_dashboard_stats(
                    p.status::text, m.nome AS municipio_nome, e.sigla AS uf,
                    COALESCE(a.tamanho_amostral, 0) AS tamanho_amostral,
                    COALESCE(a.margem_erro, 0) AS margem_erro
-            FROM pesquisas p
-            LEFT JOIN municipios m ON m.id_municipio = p.id_municipio
-            LEFT JOIN estados e ON e.id_estado = m.id_estado
-            LEFT JOIN amostras a ON a.id_amostra = p.id_amostra
+            FROM pesq_pesquisas p
+            LEFT JOIN geo_municipios m ON m.id_municipio = p.id_municipio
+            LEFT JOIN geo_estados e ON e.id_estado = m.id_estado
+            LEFT JOIN pesq_amostras a ON a.id_amostra = p.id_amostra
+            WHERE p.id_organizacao = :tid
             ORDER BY p.id_pesquisa DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     votos_res = await session.execute(
         text(
@@ -96,15 +102,16 @@ async def get_dashboard_stats(
                    COALESCE(c.sigla_partido_marca, 'NS/NR') AS partido,
                    COALESCE(c.cor_hex, '#64748b') AS cor_hex,
                    COUNT(*)::int AS votos
-            FROM respostas r
-            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            LEFT JOIN cenarios_pesquisa cp ON cp.id_cenario = r.id_cenario
-            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
-            WHERE r.tipo_registro = 'voto_direto'
+            FROM campo_respostas r
+            JOIN campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN pesq_cenarios_pesquisa cp ON cp.id_cenario = r.id_cenario
+            LEFT JOIN pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            WHERE r.tipo_registro = 'voto_direto' AND r.id_organizacao = :tid
             GROUP BY qp.id_pesquisa, r.id_cenario, cp.identificador, cp.tipo_cenario, c.nome_urna_comercial, c.sigla_partido_marca, c.cor_hex
             ORDER BY r.id_cenario ASC NULLS LAST, votos DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     rejeicao_res = await session.execute(
         text(
@@ -114,23 +121,26 @@ async def get_dashboard_stats(
                    COALESCE(c.sigla_partido_marca, 'NS/NR') AS partido,
                    COALESCE(c.cor_hex, '#64748b') AS cor_hex,
                    COUNT(*)::int AS votos
-            FROM respostas r
-            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
-            WHERE r.tipo_registro = 'rejeicao'
+            FROM campo_respostas r
+            JOIN campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            WHERE r.tipo_registro = 'rejeicao' AND r.id_organizacao = :tid
             GROUP BY qp.id_pesquisa, c.nome_urna_comercial, c.sigla_partido_marca, c.cor_hex
             ORDER BY votos DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     rel_res = await session.execute(
         text(
             """
             SELECT id_relatorio, id_pesquisa, titulo_relatorio, configuracao_crosstab, criado_em
-            FROM relatorios_tabulacao
+            FROM pesq_relatorios_tabulacao
+            WHERE id_organizacao = :tid
             ORDER BY id_relatorio DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     perg_res = await session.execute(
         text(
@@ -140,12 +150,14 @@ async def get_dashboard_stats(
                    qp.id_pergunta,
                    qp.ordem,
                    p.enunciado
-            FROM questionario_perguntas qp
-            JOIN questionarios q ON q.id_questionario = qp.id_questionario
-            JOIN perguntas p ON p.id_pergunta = qp.id_pergunta
+            FROM form_questionario_perguntas qp
+            JOIN form_questionarios q ON q.id_questionario = qp.id_questionario
+            JOIN form_perguntas p ON p.id_pergunta = qp.id_pergunta
+            WHERE qp.id_organizacao = :tid
             ORDER BY q.id_pesquisa ASC, qp.ordem ASC
             """
-        )
+        ),
+        {"tid": tid},
     )
 
     return {
@@ -165,26 +177,32 @@ async def get_dashboard_stats(
 @campo_operacoes_router.get("/resumo-opcoes")
 async def get_resumo_opcoes(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     pesq = await session.execute(
         text(
             """
             SELECT p.id_pesquisa, p.nome, p.status::text, p.id_municipio,
                    COALESCE(a.tamanho_amostral, 0) AS total_entrevistas
-            FROM pesquisas p
-            LEFT JOIN amostras a ON a.id_amostra = p.id_amostra
+            FROM pesq_pesquisas p
+            LEFT JOIN pesq_amostras a ON a.id_amostra = p.id_amostra
+            WHERE p.id_organizacao = :tid
             ORDER BY p.id_pesquisa DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     quest = await session.execute(
-        text("SELECT id_questionario, titulo, id_pesquisa FROM questionarios WHERE ativo = true ORDER BY id_questionario DESC")
+        text("SELECT id_questionario, titulo, id_pesquisa FROM form_questionarios WHERE ativo = true AND id_organizacao = :tid ORDER BY id_questionario DESC"),
+        {"tid": tid},
     )
     prof = await session.execute(
-        text("SELECT id_profissional, nome, tipo_profissional FROM profissionais WHERE ativo = true ORDER BY nome ASC")
+        text("SELECT id_profissional, nome, tipo_profissional FROM campo_profissionais WHERE ativo = true AND id_organizacao = :tid ORDER BY nome ASC"),
+        {"tid": tid},
     )
     bairros = await session.execute(
-        text("SELECT id_bairro, id_municipio, nome_bairro, codigo_bairro_ibge FROM bairros_ibge WHERE ativo = true ORDER BY nome_bairro ASC")
+        text("SELECT id_bairro, id_municipio, nome_bairro, codigo_bairro_ibge FROM geo_bairros_ibge WHERE ativo = true ORDER BY nome_bairro ASC")
     )
     return {
         "pesquisas": [dict(r) for r in pesq.mappings().all()],
@@ -197,6 +215,7 @@ async def get_resumo_opcoes(
 @campo_operacoes_router.get("/atribuicoes")
 async def list_atribuicoes(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> list[dict[str, Any]]:
     result = await session.execute(
         text(
@@ -206,13 +225,15 @@ async def list_atribuicoes(
                    a.status_atribuicao, a.id_organizacao,
                    p.nome AS profissional_nome,
                    pe.nome AS pesquisa_titulo
-            FROM atribuicao_pesquisadores a
-            LEFT JOIN profissionais p ON p.id_profissional = a.id_profissional
-            LEFT JOIN pesquisas pe ON pe.id_pesquisa = a.id_pesquisa
+            FROM campo_atribuicao_pesquisadores a
+            LEFT JOIN campo_profissionais p ON p.id_profissional = a.id_profissional
+            LEFT JOIN pesq_pesquisas pe ON pe.id_pesquisa = a.id_pesquisa
+            WHERE a.id_organizacao = :tid
             ORDER BY a.id_atribuicao DESC
             LIMIT 200
             """
-        )
+        ),
+        {"tid": tenant.tenant_id},
     )
     return [dict(r) for r in result.mappings().all()]
 
@@ -221,36 +242,40 @@ async def list_atribuicoes(
 async def create_atribuicao(
     payload: AtribuicaoCreateSchema,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     existing = await session.execute(
         text(
             """
             SELECT id_atribuicao, id_pesquisa, id_profissional, lote_setor, meta_entrevistas, status_atribuicao
-            FROM atribuicao_pesquisadores
-            WHERE id_pesquisa = :id_pesquisa AND id_profissional = :id_profissional
+            FROM campo_atribuicao_pesquisadores
+            WHERE id_pesquisa = :id_pesquisa AND id_profissional = :id_profissional AND id_organizacao = :tid
             LIMIT 1
             """
         ),
-        {"id_pesquisa": payload.id_pesquisa, "id_profissional": payload.id_profissional},
+        {"id_pesquisa": payload.id_pesquisa, "id_profissional": payload.id_profissional, "tid": tid},
     )
     found = existing.mappings().first()
     if found:
         return dict(found)
 
+    data = payload.model_dump()
+    data["id_organizacao"] = tid
     result = await session.execute(
         text(
             """
-            INSERT INTO atribuicao_pesquisadores (
+            INSERT INTO campo_atribuicao_pesquisadores (
                 id_pesquisa, id_profissional, id_bairro, lote_setor,
                 meta_entrevistas, data_inicio, data_limite, status_atribuicao, id_organizacao
             ) VALUES (
                 :id_pesquisa, :id_profissional, :id_bairro, :lote_setor,
-                :meta_entrevistas, COALESCE(:data_inicio, CURRENT_DATE), COALESCE(:data_limite, CURRENT_DATE + 30), :status_atribuicao, COALESCE(:id_organizacao, 1)
+                :meta_entrevistas, COALESCE(:data_inicio, CURRENT_DATE), COALESCE(:data_limite, CURRENT_DATE + 30), :status_atribuicao, :id_organizacao
             )
             RETURNING id_atribuicao, id_pesquisa, id_profissional, lote_setor, meta_entrevistas, status_atribuicao
             """
         ),
-        payload.model_dump(),
+        data,
     )
     await session.commit()
     row = result.mappings().first()
@@ -263,7 +288,7 @@ async def delete_atribuicao(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     await session.execute(
-        text("DELETE FROM atribuicao_pesquisadores WHERE id_atribuicao = :id_atribuicao"),
+        text("DELETE FROM campo_atribuicao_pesquisadores WHERE id_atribuicao = :id_atribuicao"),
         {"id_atribuicao": id_atribuicao},
     )
     await session.commit()
@@ -280,9 +305,9 @@ async def list_transferencias(
                    t.id_atribuicao_destino, t.id_pesquisador_origem, t.id_pesquisador_destino,
                    t.quantidade_transferida, t.motivo, t.data_transferencia,
                    po.nome AS origem_nome, pd.nome AS destino_nome
-            FROM transferencias_atribuicao t
-            LEFT JOIN profissionais po ON po.id_profissional = t.id_pesquisador_origem
-            LEFT JOIN profissionais pd ON pd.id_profissional = t.id_pesquisador_destino
+            FROM campo_transferencias_atribuicao t
+            LEFT JOIN campo_profissionais po ON po.id_profissional = t.id_pesquisador_origem
+            LEFT JOIN campo_profissionais pd ON pd.id_profissional = t.id_pesquisador_destino
             ORDER BY t.id_transferencia DESC
             LIMIT 200
             """
@@ -301,7 +326,7 @@ async def create_transferencia(
     result = await session.execute(
         text(
             """
-            INSERT INTO transferencias_atribuicao (
+            INSERT INTO campo_transferencias_atribuicao (
                 id_pesquisa, id_atribuicao_origem, id_atribuicao_destino,
                 id_pesquisador_origem, id_pesquisador_destino, id_autorizador,
                 quantidade_transferida, motivo, id_organizacao
@@ -331,9 +356,9 @@ async def list_reatribuicoes(
                    h.id_pesquisador_anterior, h.id_pesquisador_novo,
                    h.motivo, h.data_reatribuicao,
                    pa.nome AS anterior_nome, pn.nome AS novo_nome
-            FROM historico_reatribuicao_questionarios h
-            LEFT JOIN profissionais pa ON pa.id_profissional = h.id_pesquisador_anterior
-            LEFT JOIN profissionais pn ON pn.id_profissional = h.id_pesquisador_novo
+            FROM campo_historico_reatribuicao_questionarios h
+            LEFT JOIN campo_profissionais pa ON pa.id_profissional = h.id_pesquisador_anterior
+            LEFT JOIN campo_profissionais pn ON pn.id_profissional = h.id_pesquisador_novo
             ORDER BY h.id_historico_reatribuicao DESC
             LIMIT 200
             """
@@ -350,7 +375,7 @@ async def create_reatribuicao(
     result = await session.execute(
         text(
             """
-            INSERT INTO historico_reatribuicao_questionarios (
+            INSERT INTO campo_historico_reatribuicao_questionarios (
                 id_questionario_pessoa, id_pesquisador_anterior,
                 id_pesquisador_novo, id_usuario_autorizador, motivo, id_organizacao
             ) VALUES (
@@ -365,7 +390,7 @@ async def create_reatribuicao(
     if payload.id_questionario_pessoa is not None:
         await session.execute(
             text(
-                "UPDATE questionarios_pessoas SET id_pesquisador = :novo WHERE id_questionario_pessoa = :id_qp"
+                "UPDATE campo_questionarios_pessoas SET id_pesquisador = :novo WHERE id_questionario_pessoa = :id_qp"
             ),
             {"novo": payload.id_pesquisador_novo, "id_qp": payload.id_questionario_pessoa},
         )
@@ -384,8 +409,8 @@ async def list_sessoes_profissionais(
             SELECT s.id_sessao::text, s.id_profissional, s.id_usuario,
                    s.ip_origem, s.user_agent, s.expira_em, s.revogado, s.criado_em,
                    p.nome AS profissional_nome
-            FROM sessoes_refresh_tokens s
-            LEFT JOIN profissionais p ON p.id_profissional = s.id_profissional
+            FROM sys_sessoes_refresh_tokens s
+            LEFT JOIN campo_profissionais p ON p.id_profissional = s.id_profissional
             ORDER BY s.criado_em DESC
             LIMIT 200
             """
@@ -405,8 +430,8 @@ async def list_logs_autenticacao(
                    l.identificador_informado, l.sucesso, l.motivo_falha,
                    l.ip_origem, l.data_evento,
                    p.nome AS profissional_nome
-            FROM logs_autenticacao l
-            LEFT JOIN profissionais p ON p.id_profissional = l.id_profissional
+            FROM sys_logs_autenticacao l
+            LEFT JOIN campo_profissionais p ON p.id_profissional = l.id_profissional
             ORDER BY l.data_evento DESC
             LIMIT 200
             """
@@ -434,10 +459,10 @@ async def get_apresentacao_dados_pesquisa(
                    qp.ordem,
                    p.enunciado,
                    p.tipo_questao
-            FROM questionario_perguntas qp
-            JOIN questionarios q ON q.id_questionario = qp.id_questionario
-            JOIN perguntas p ON p.id_pergunta = qp.id_pergunta
-            LEFT JOIN cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
+            FROM form_questionario_perguntas qp
+            JOIN form_questionarios q ON q.id_questionario = qp.id_questionario
+            JOIN form_perguntas p ON p.id_pergunta = qp.id_pergunta
+            LEFT JOIN pesq_cenarios_pesquisa cp ON cp.id_cenario = qp.id_cenario
             WHERE q.id_pesquisa = :pid
             ORDER BY COALESCE(qp.id_cenario, 999999) ASC, qp.ordem ASC, qp.id_questionario_pergunta ASC
             """
@@ -463,11 +488,11 @@ async def get_apresentacao_dados_pesquisa(
                    o.rotulo AS opcao_texto,
                    r.codigo_especial,
                    COUNT(*)::int AS votos
-            FROM respostas r
-            JOIN questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
-            LEFT JOIN candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
-            LEFT JOIN opcoes_resposta o ON o.id_opcao = r.id_opcao
-            LEFT JOIN perguntas_itens_bateria ib ON ib.id_item_bateria = r.id_item_bateria
+            FROM campo_respostas r
+            JOIN campo_questionarios_pessoas qp ON qp.id_questionario_pessoa = r.id_questionario_pessoa
+            LEFT JOIN pesq_candidatos_produtos c ON c.id_candidato_produto = r.id_candidato_produto
+            LEFT JOIN form_opcoes_resposta o ON o.id_opcao = r.id_opcao
+            LEFT JOIN form_perguntas_itens_bateria ib ON ib.id_item_bateria = r.id_item_bateria
             WHERE qp.id_pesquisa = :pid
             GROUP BY r.id_questionario_pergunta, r.id_cenario, r.id_item_bateria, ib.descricao_item,
                      r.tipo_registro, r.valor_texto,
@@ -494,7 +519,7 @@ async def get_apresentacao_dados_pesquisa(
         text(
             """
             SELECT id_relatorio, id_pesquisa, titulo_relatorio, configuracao_crosstab, criado_em
-            FROM relatorios_tabulacao
+            FROM pesq_relatorios_tabulacao
             WHERE id_pesquisa = :pid
             ORDER BY id_relatorio DESC
             """
@@ -514,9 +539,9 @@ async def get_apresentacao_dados_pesquisa(
                    COALESCE(SUM(c.quantidade_meta), 0)::int AS quantidade_meta,
                    COALESCE(SUM(c.quantidade_coletada), 0)::int AS quantidade_coletada,
                    COALESCE(ROUND(AVG(c.percentual_meta)::numeric, 2), 0)::float AS percentual_meta
-            FROM pesquisas p
-            JOIN amostras_dimensao d ON d.id_amostra = p.id_amostra
-            LEFT JOIN amostras_cotas c ON c.id_amostra_dimensao = d.id_amostra_dimensao
+            FROM pesq_pesquisas p
+            JOIN pesq_amostras_dimensao d ON d.id_amostra = p.id_amostra
+            LEFT JOIN pesq_amostras_cotas c ON c.id_amostra_dimensao = d.id_amostra_dimensao
             WHERE p.id_pesquisa = :pid
             GROUP BY d.id_amostra_dimensao, d.nome_dimensao, d.fonte_dados, d.ordem_exibicao, c.categoria
             ORDER BY d.ordem_exibicao ASC, quantidade_meta DESC

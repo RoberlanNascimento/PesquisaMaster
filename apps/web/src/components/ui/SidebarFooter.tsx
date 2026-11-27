@@ -39,6 +39,37 @@ export function SidebarFooter({
   const connectedCollab = useUiSessionStore((state) => state.clientCollaborators[0]);
 
   const [dbUser, setDbUser] = useState<{ fullName?: string; roleLabel?: string } | null>(null);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
+  const [userPhotoFailed, setUserPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    setUserPhotoFailed(false);
+  }, [userPhotoUrl]);
+
+  useEffect(() => {
+    const isJsdom = typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom");
+    if (isJsdom) return;
+
+    const uid = currentUser?.id;
+    if (uid && /^\d+$/.test(uid)) {
+      setUserPhotoUrl(`http://127.0.0.1:8000/api/v1/pesquisas-tabelas/usuarios/${uid}/foto/view`);
+    } else {
+      setUserPhotoUrl(null);
+    }
+
+    const handlePhotoUpdated = (event: Event): void => {
+      const detail = (event as CustomEvent<{ userId?: string; photoUrl?: string | null }>).detail;
+      if (detail?.userId && uid && String(detail.userId) === String(uid)) {
+        setUserPhotoUrl(detail.photoUrl ?? null);
+        setUserPhotoFailed(false);
+      }
+    };
+
+    window.addEventListener("pm_user_photo_updated", handlePhotoUpdated);
+    return () => {
+      window.removeEventListener("pm_user_photo_updated", handlePhotoUpdated);
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("pm_auth_token") : null;
@@ -104,6 +135,8 @@ export function SidebarFooter({
               ...SIDEBAR_AVATAR_STYLE,
               width: "30px",
               height: "30px",
+              borderRadius: "50%",
+              overflow: "hidden",
               background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
               border: "1px solid #475569",
               fontSize: "11px",
@@ -112,7 +145,23 @@ export function SidebarFooter({
               letterSpacing: "0.5px",
             }}
           >
-            {initials}
+            {userPhotoUrl && !userPhotoFailed ? (
+              <img
+                data-testid="sidebar-user-avatar-img"
+                src={userPhotoUrl}
+                alt={userName}
+                onError={() => setUserPhotoFailed(true)}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  borderRadius: "50%",
+                  display: "block",
+                }}
+              />
+            ) : (
+              initials
+            )}
           </span>
           <span
             data-testid="sidebar-user-status-dot"

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { usePermissions } from "../security/RbacGuard";
 import { useUiSessionStore, type ActiveTab } from "../../lib/store";
 import type { NavItemConfig } from "./SidebarNavItems";
 import {
@@ -56,6 +57,8 @@ export function SidebarSettingsDropdown({
 }: SidebarSettingsDropdownProps): React.JSX.Element | null {
   const clientCompaniesCount = useUiSessionStore((state) => state.clientCompanies.length);
   const logout = useUiSessionStore((state) => state.logout);
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission(["ADMIN_SISTEMA"]);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -255,9 +258,9 @@ export function SidebarSettingsDropdown({
         }}
       >
         {renderSection("Demografia", GEO_DROPDOWN_ITEMS, "sidebar-settings-group-label")}
-        {renderSection("Empresa", ACCESS_DROPDOWN_ITEMS, "sidebar-company-group-label")}
+        {isAdmin && renderSection("Empresa", ACCESS_DROPDOWN_ITEMS, "sidebar-company-group-label")}
         {renderSection("Catálogo", CATALOG_DROPDOWN_ITEMS)}
-        {renderSection("Auditoria", AUDIT_DROPDOWN_ITEMS, "sidebar-audit-group-label")}
+        {isAdmin && renderSection("Auditoria", AUDIT_DROPDOWN_ITEMS, "sidebar-audit-group-label")}
       </div>
 
       <div

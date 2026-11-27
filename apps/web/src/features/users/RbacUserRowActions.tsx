@@ -30,8 +30,9 @@ export function RbacUserRowActions({
       >
         ✏️ Editar Cadastro
       </button>
-      {u.role === "ADMIN_SISTEMA" && u.isActive ? (
+      {u.isMasterOwner || (u.role === "ADMIN_SISTEMA" && u.isActive) ? (
         <span
+          data-testid="badge-master-protected"
           style={{
             padding: "5px 10px",
             borderRadius: "8px",
@@ -41,7 +42,7 @@ export function RbacUserRowActions({
             color: "#94a3b8",
           }}
         >
-          🛡️ Protegido
+          🛡️ Master Protegido
         </span>
       ) : (
         <button

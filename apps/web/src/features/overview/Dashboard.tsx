@@ -1,8 +1,35 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { NOCTURNE_TOKENS } from "../../lib/designTokens";
+import { useUiSessionStore, type ActiveTab } from "../../lib/store";
 import { OfficeSectionCard } from "./OverviewCharts";
 import type { OverviewSurveyDataset, CandidateStatPoint, ScenarioDataset } from "./overviewData";
 import { ExecutiveDossierModal } from "./ExecutiveDossierModal";
+
+const { colors } = NOCTURNE_TOKENS;
+
+const GUIDED_FLOW_STEPS: readonly {
+  readonly step: string;
+  readonly label: string;
+  readonly tab: ActiveTab;
+}[] = [
+  { step: "1", label: "Território & Eleitorado", tab: "geo-electorate-tse" },
+  { step: "2", label: "Formulários & Perguntas", tab: "questionnaires" },
+  { step: "3", label: "Amostragem & Cotas", tab: "sampling" },
+  { step: "4", label: "Pesquisas & Cenários", tab: "surveys" },
+  { step: "5", label: "Distribuição & Campo", tab: "distribution" },
+  { step: "6", label: "Tabulação & Relatórios", tab: "tabulation" },
+];
+
+const NOCTURNE_CHART_PALETTE: readonly string[] = [
+  colors.primaryContainer,
+  colors.successPastel,
+  colors.warningPastel,
+  colors.errorPastel,
+  colors.secondary,
+  colors.tertiary,
+  colors.outline,
+];
 
 export function Dashboard(): React.JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>("ALL");
@@ -36,42 +63,18 @@ export function Dashboard(): React.JSX.Element {
     const relatoriosAll = Array.isArray(dbStats.relatorios) ? dbStats.relatorios : [];
     const perguntasAll = Array.isArray(dbStats.perguntas) ? dbStats.perguntas : [];
 
-    const PALETTE = [
-      "#93c5fd",
-      "#86efac",
-      "#fcd34d",
-      "#f9a8d4",
-      "#c4b5fd",
-      "#67e8f9",
-      "#fdba74",
-      "#cbd5e1",
-    ];
-    const PASTEL_REJECTION = "#fca5a5";
-
-    const toPastelHex = (rawHex: string | null | undefined, fallback: string): string => {
-      if (!rawHex || typeof rawHex !== "string") return fallback;
-      const clean = rawHex.trim().replace(/^#/, "");
-      if (!/^[0-9a-fA-F]{6}$/.test(clean)) return fallback;
-      const r = parseInt(clean.slice(0, 2), 16);
-      const g = parseInt(clean.slice(2, 4), 16);
-      const b = parseInt(clean.slice(4, 6), 16);
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      if (luminance > 0.9) return fallback;
-      const mix = (ch: number) => Math.round(ch * 0.52 + 255 * 0.48);
-      const toHex = (n: number) => Math.min(255, Math.max(0, n)).toString(16).padStart(2, "0");
-      return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
-    };
+    const PASTEL_REJECTION = colors.errorPastel;
 
     const parseCrosstabRows = (items: any[]): any[] =>
       items.map((item: any, idx: number) => {
         const rawName = String(item.candidato ?? "Sem identificação");
         const match = rawName.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-        const fallbackColor = PALETTE[idx % PALETTE.length] || "#93c5fd";
+        const tokenColor = NOCTURNE_CHART_PALETTE[idx % NOCTURNE_CHART_PALETTE.length] ?? colors.primaryContainer;
         return {
           candidato: match?.[1]?.trim() ?? rawName,
           partido: match?.[2]?.trim() ?? "NS/NR",
           votos: Number(item.votos) || 0,
-          cor_hex: toPastelHex(item.cor_hex, fallbackColor),
+          cor_hex: tokenColor,
         };
       });
 
@@ -80,7 +83,7 @@ export function Dashboard(): React.JSX.Element {
       return rows.map((v: any, idx: number) => {
         const qtd = Number(v.votos) || 0;
         const pct = total > 0 ? (qtd / total) * 100 : 0;
-        const fallbackColor = PALETTE[idx % PALETTE.length] || "#93c5fd";
+        const tokenColor = NOCTURNE_CHART_PALETTE[idx % NOCTURNE_CHART_PALETTE.length] ?? colors.primaryContainer;
         return {
           code: `${prefix}-${idx + 1}`,
           name: v.candidato,
@@ -88,7 +91,7 @@ export function Dashboard(): React.JSX.Element {
           quantity: qtd,
           frequency: `${qtd}`,
           percentage: pct.toFixed(2),
-          color: forceColor || toPastelHex(v.cor_hex, fallbackColor),
+          color: forceColor || tokenColor,
         };
       });
     };
@@ -223,23 +226,95 @@ export function Dashboard(): React.JSX.Element {
 
   return (
     <section data-testid="integrated-overview-page" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Fluxo Guiado de Operação (Passo a Passo) */}
+      <div
+        data-testid="dashboard-guided-flow"
+        style={{
+          backgroundColor: colors.surfaceCard,
+          border: `1px solid ${colors.borderSubtle}`,
+          borderRadius: "16px",
+          padding: "14px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: colors.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Fluxo Guiado de Operação (Passo a Passo)
+          </span>
+          <span style={{ fontSize: "11px", color: colors.textMuted }}>
+            Clique em qualquer etapa para navegar diretamente
+          </span>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(165px, 1fr))",
+            gap: "8px",
+          }}
+        >
+          {GUIDED_FLOW_STEPS.map((item) => (
+            <button
+              key={item.tab}
+              type="button"
+              data-testid={`guided-step-${item.step}`}
+              onClick={() => useUiSessionStore.getState().setActiveTab(item.tab)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "9px 11px",
+                borderRadius: "10px",
+                border: `1px solid ${colors.borderSubtle}`,
+                backgroundColor: colors.surfaceContainerLow,
+                color: colors.textPrimary,
+                fontSize: "12px",
+                fontWeight: 600,
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+            >
+              <span
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "9999px",
+                  backgroundColor: "rgba(138, 180, 248, 0.16)",
+                  color: colors.primary,
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {item.step}
+              </span>
+              <span style={{ lineHeight: "15px" }}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
         {[
-          { label: "PESQUISAS CADASTRADAS", value: dbStats.total_pesquisas.toLocaleString("pt-BR"), color: "#8ab4f8" },
-          { label: "CIDADES CADASTRADAS", value: dbStats.total_cidades.toLocaleString("pt-BR"), color: "#81c995" },
-          { label: "POPULAÇÃO DOS MUNICÍPIOS", value: dbStats.populacao_municipios.toLocaleString("pt-BR"), color: "#f8fafc" },
-          { label: "TOTAL DE ENTREVISTAS", value: dbStats.total_entrevistas.toLocaleString("pt-BR"), color: "#fde293" },
+          { label: "PESQUISAS CADASTRADAS", value: dbStats.total_pesquisas.toLocaleString("pt-BR"), color: colors.primaryContainer },
+          { label: "CIDADES CADASTRADAS", value: dbStats.total_cidades.toLocaleString("pt-BR"), color: colors.successPastel },
+          { label: "POPULAÇÃO DOS MUNICÍPIOS", value: dbStats.populacao_municipios.toLocaleString("pt-BR"), color: colors.textPrimary },
+          { label: "TOTAL DE ENTREVISTAS", value: dbStats.total_entrevistas.toLocaleString("pt-BR"), color: colors.warningPastel },
         ].map((kpi) => (
           <div
             key={kpi.label}
             style={{
-              backgroundColor: "#1b1c1d",
-              border: "1px solid #2d2f31",
+              backgroundColor: colors.surfaceContainerLow,
+              border: `1px solid ${colors.borderSubtle}`,
               borderRadius: "14px",
               padding: "16px",
             }}
           >
-            <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", letterSpacing: "0.04em" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: colors.textMuted, letterSpacing: "0.04em" }}>
               {kpi.label}
             </div>
             <div style={{ fontSize: "24px", fontWeight: 800, color: kpi.color, marginTop: "6px" }}>
@@ -270,7 +345,7 @@ export function Dashboard(): React.JSX.Element {
               id="select-survey-date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "6px", border: "1px solid #353535", fontSize: "13px", backgroundColor: "#252628", color: "#f8fafc" }}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: "6px", border: `1px solid ${colors.borderSubtle}`, fontSize: "13px", backgroundColor: colors.surfaceElevated, color: colors.textPrimary }}
             >
               <option value="ALL">Todas as Datas ({availableDates.length} rodadas)</option>
               {availableDates.map((dt) => (
@@ -287,7 +362,7 @@ export function Dashboard(): React.JSX.Element {
               id="select-survey-name"
               value={activeSurvey?.id ?? ""}
               onChange={(e) => setSelectedSurveyId(e.target.value)}
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "6px", border: "1px solid #353535", fontSize: "13px", backgroundColor: "#252628", color: "#f8fafc" }}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: "6px", border: `1px solid ${colors.borderSubtle}`, fontSize: "13px", backgroundColor: colors.surfaceElevated, color: colors.textPrimary }}
             >
               {filteredSurveys.map((srv) => (
                 <option key={srv.id} value={srv.id}>
@@ -299,7 +374,7 @@ export function Dashboard(): React.JSX.Element {
         </div>
 
         {activeSurvey && (
-          <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #353535", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", fontSize: "12px", color: "#c3c6d1" }}>
+          <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${colors.borderSubtle}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", fontSize: "12px", color: colors.onSurfaceVariant }}>
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
               <span><strong>Pesquisa:</strong> {activeSurvey.surveyName}</span>
               <span><strong>Data:</strong> {activeSurvey.surveyDate}</span>
@@ -312,7 +387,7 @@ export function Dashboard(): React.JSX.Element {
               type="button"
               data-testid="btn-generate-executive-pdf"
               onClick={() => setDossierOpen(true)}
-              style={{ padding: "9px 16px", backgroundColor: "#8ab4f8", color: "#003061", border: "none", borderRadius: "10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+              style={{ padding: "9px 16px", backgroundColor: colors.primaryContainer, color: colors.onPrimary, border: "none", borderRadius: "10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
             >
               📄 Gerar Dossiê Executivo PDF (TSE)
             </button>
@@ -320,7 +395,7 @@ export function Dashboard(): React.JSX.Element {
         )}
 
         {relatoriosList.length > 0 && (
-          <div style={{ marginTop: "10px", fontSize: "12px", color: "#81c995" }}>
+          <div style={{ marginTop: "10px", fontSize: "12px", color: colors.successPastel }}>
             Relatório Consolidado: <strong>{relatoriosList[0].titulo_relatorio}</strong>
           </div>
         )}

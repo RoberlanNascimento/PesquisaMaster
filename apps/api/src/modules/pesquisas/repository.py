@@ -23,10 +23,15 @@ class PesquisasRepository:
         self.session = session
 
     async def list_pesquisas(
-        self, search: str | None = None, limit: int = 50, offset: int = 0
+        self,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        tenant_id: int = 1,
     ) -> Sequence[PesquisaDbModel]:
         stmt = (
             select(PesquisaDbModel)
+            .where(PesquisaDbModel.id_organizacao == tenant_id)
             .order_by(PesquisaDbModel.id_pesquisa.desc())
             .offset(offset)
             .limit(limit)
@@ -36,14 +41,28 @@ class PesquisasRepository:
         res = await self.session.execute(stmt)
         return res.scalars().all()
 
-    async def get_by_id(self, id_pesquisa: int) -> PesquisaDbModel | None:
-        stmt = select(PesquisaDbModel).where(PesquisaDbModel.id_pesquisa == id_pesquisa)
+    async def get_by_id(
+        self, id_pesquisa: int, tenant_id: int = 1
+    ) -> PesquisaDbModel | None:
+        stmt = select(PesquisaDbModel).where(
+            PesquisaDbModel.id_pesquisa == id_pesquisa,
+            PesquisaDbModel.id_organizacao == tenant_id,
+        )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
-    async def create(self, payload: PesquisaCreate) -> PesquisaDbModel:
+    async def create(
+        self,
+        payload: PesquisaCreate,
+        tenant_id: int = 1,
+        user_id: int | None = None,
+    ) -> PesquisaDbModel:
         data = payload.model_dump()
-        if data.get("id_usuario_criador") is None:
+        data["id_organizacao"] = tenant_id
+        if user_id is not None:
+            data["id_usuario"] = user_id
+            data["id_usuario_criador"] = user_id
+        elif data.get("id_usuario_criador") is None:
             data["id_usuario_criador"] = data.get("id_usuario") or 1
         model = PesquisaDbModel(**data)
         self.session.add(model)
@@ -51,8 +70,10 @@ class PesquisasRepository:
         await self.session.refresh(model)
         return model
 
-    async def update(self, id_pesquisa: int, payload: PesquisaUpdate) -> PesquisaDbModel | None:
-        model = await self.get_by_id(id_pesquisa)
+    async def update(
+        self, id_pesquisa: int, payload: PesquisaUpdate, tenant_id: int = 1
+    ) -> PesquisaDbModel | None:
+        model = await self.get_by_id(id_pesquisa, tenant_id=tenant_id)
         if not model:
             return None
         data = payload.model_dump(exclude_unset=True)
@@ -63,9 +84,13 @@ class PesquisasRepository:
         return model
 
     async def set_bloqueio(
-        self, id_pesquisa: int, is_bloqueada: bool, motivo: str | None = None
+        self,
+        id_pesquisa: int,
+        is_bloqueada: bool,
+        motivo: str | None = None,
+        tenant_id: int = 1,
     ) -> PesquisaDbModel | None:
-        model = await self.get_by_id(id_pesquisa)
+        model = await self.get_by_id(id_pesquisa, tenant_id=tenant_id)
         if not model:
             return None
         model.is_bloqueada = is_bloqueada
@@ -80,13 +105,23 @@ class PesquisasRepository:
         res = await self.session.execute(stmt)
         return res.scalars().all()
 
-    async def list_amostras(self) -> Sequence[AmostraDbModel]:
-        stmt = select(AmostraDbModel).order_by(AmostraDbModel.descricao.asc()).limit(100)
+    async def list_amostras(self, tenant_id: int = 1) -> Sequence[AmostraDbModel]:
+        stmt = (
+            select(AmostraDbModel)
+            .where(AmostraDbModel.id_organizacao == tenant_id)
+            .order_by(AmostraDbModel.descricao.asc())
+            .limit(100)
+        )
         res = await self.session.execute(stmt)
         return res.scalars().all()
 
-    async def list_profissionais(self) -> Sequence[ProfissionalDbModel]:
-        stmt = select(ProfissionalDbModel).order_by(ProfissionalDbModel.nome.asc()).limit(100)
+    async def list_profissionais(self, tenant_id: int = 1) -> Sequence[ProfissionalDbModel]:
+        stmt = (
+            select(ProfissionalDbModel)
+            .where(ProfissionalDbModel.id_organizacao == tenant_id)
+            .order_by(ProfissionalDbModel.nome.asc())
+            .limit(100)
+        )
         res = await self.session.execute(stmt)
         return res.scalars().all()
 

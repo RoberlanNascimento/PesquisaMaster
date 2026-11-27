@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { EnterpriseCrudWorkspace } from "../../components/ui/EnterpriseCrudWorkspace";
+import { RbacGuard } from "../../components/security/RbacGuard";
 import { RbacUsersModals } from "./RbacUsersModals";
 import { RbacUserRowActions } from "./RbacUserRowActions";
 import { useUiSessionStore } from "../../lib/store";
@@ -17,7 +18,8 @@ import {
 import { createUserInApi, fetchUsersFromApi, mapCargoToRole } from "./useRbacUsersApi";
 
 export function RbacUsersFeature(): React.JSX.Element {
-  const [users, setUsers] = useState<readonly UserAccountRecord[]>(INITIAL_USERS);
+  const isJsdom = typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom");
+  const [users, setUsers] = useState<readonly UserAccountRecord[]>(isJsdom ? INITIAL_USERS : []);
   const [activeTab, setActiveTab] = useState<string>("ATIVOS");
   const [search, setSearch] = useState<string>("");
   const [filterRole, setFilterRole] = useState<string>("ALL");
@@ -30,13 +32,41 @@ export function RbacUsersFeature(): React.JSX.Element {
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [revokingTarget, setRevokingTarget] = useState<UserAccountRecord | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const activeTenantId = useUiSessionStore((state) => state.activeTenantId);
+  const currentUserId = useUiSessionStore((state) => state.currentUser?.id);
   const currentUserEmail = useUiSessionStore((state) => state.currentUser?.email) || "admin@dataopinion.com.br";
 
   useEffect(() => {
+    let cancelled = false;
     fetchUsersFromApi().then((loaded) => {
-      if (loaded) setUsers(loaded);
+      if (!cancelled && loaded !== null) {
+        setUsers(loaded);
+      }
     });
-  }, []);
+
+    const handlePhotoUpdated = (event: Event): void => {
+      const detail = (event as CustomEvent<{ userId?: string; photoUrl?: string | null }>).detail;
+      if (!detail?.userId) return;
+      setUsers((prev) =>
+        prev.map((u) =>
+          String(u.id) === String(detail.userId)
+            ? { ...u, photoUrl: detail.photoUrl ?? null }
+            : u,
+        ),
+      );
+      setEditingUser((prev) =>
+        prev && String(prev.id) === String(detail.userId)
+          ? { ...prev, photoUrl: detail.photoUrl ?? null }
+          : prev,
+      );
+    };
+
+    window.addEventListener("pm_user_photo_updated", handlePhotoUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pm_user_photo_updated", handlePhotoUpdated);
+    };
+  }, [activeTenantId, currentUserId]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -179,7 +209,32 @@ export function RbacUsersFeature(): React.JSX.Element {
   };
 
   return (
-    <>
+    <RbacGuard
+      allowedRoles={["ADMIN_SISTEMA"]}
+      fallback={
+        <div
+          data-testid="rbac-access-denied"
+          style={{
+            padding: "32px",
+            borderRadius: "16px",
+            backgroundColor: "#1e1f20",
+            border: "1px solid rgba(242, 139, 130, 0.35)",
+            color: "#f8fafc",
+            maxWidth: "560px",
+            margin: "24px auto",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "28px", marginBottom: "10px" }}>🔒</div>
+          <h2 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: 700 }}>
+            Acesso Restrito (RBAC)
+          </h2>
+          <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", lineHeight: 1.5 }}>
+            Seu nível de acesso atual não possui permissão para gerenciar usuários, papéis RBAC ou credenciais administrativas.
+          </p>
+        </div>
+      }
+    >
       {feedbackMsg && (
         <div
           data-testid="users-feedback"
@@ -272,6 +327,6 @@ export function RbacUsersFeature(): React.JSX.Element {
         onConfirmRevoke={handleRevokeSessions}
         onCancelRevoke={() => setRevokingTarget(null)}
       />
-    </>
+    </RbacGuard>
   );
 }

@@ -16,7 +16,7 @@ class PesquisasBase(DeclarativeBase):
 class EstadoDbModel(PesquisasBase):
     """Tabela `estados`."""
 
-    __tablename__ = "estados"
+    __tablename__ = "geo_estados"
 
     id_estado: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     sigla: Mapped[str] = mapped_column(String(2), nullable=False)
@@ -26,12 +26,12 @@ class EstadoDbModel(PesquisasBase):
 class MunicipioDbModel(PesquisasBase):
     """Tabela `municipios`."""
 
-    __tablename__ = "municipios"
+    __tablename__ = "geo_municipios"
 
     id_municipio: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
     id_estado: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("estados.id_estado"), nullable=True
+        Integer, ForeignKey("geo_estados.id_estado"), nullable=True
     )
     codigo_ibge: Mapped[int] = mapped_column(Integer, nullable=False)
     populacao_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -47,22 +47,23 @@ class MunicipioDbModel(PesquisasBase):
 class AmostraDbModel(PesquisasBase):
     """Tabela `amostras`."""
 
-    __tablename__ = "amostras"
+    __tablename__ = "pesq_amostras"
 
     id_amostra: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     id_municipio: Mapped[int] = mapped_column(
-        Integer, ForeignKey("municipios.id_municipio"), nullable=False
+        Integer, ForeignKey("geo_municipios.id_municipio"), nullable=False
     )
     descricao: Mapped[str] = mapped_column(String(255), nullable=False)
     nivel_confianca: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=95.0)
     margem_erro: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=2.5)
     tamanho_amostral: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    id_organizacao: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ProfissionalDbModel(PesquisasBase):
     """Tabela `profissionais` (Estatísticos e pesquisadores)."""
 
-    __tablename__ = "profissionais"
+    __tablename__ = "campo_profissionais"
 
     id_profissional: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -73,12 +74,13 @@ class ProfissionalDbModel(PesquisasBase):
         String(50), nullable=False, default="ESTATISTICO"
     )
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    id_organizacao: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class UsuarioDbModel(PesquisasBase):
     """Tabela `usuarios`."""
 
-    __tablename__ = "usuarios"
+    __tablename__ = "sys_usuarios"
 
     id_usuario: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -90,7 +92,7 @@ class UsuarioDbModel(PesquisasBase):
 class PesquisaDbModel(PesquisasBase):
     """Tabela central `pesquisas`."""
 
-    __tablename__ = "pesquisas"
+    __tablename__ = "pesq_pesquisas"
 
     id_pesquisa: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -102,19 +104,19 @@ class PesquisaDbModel(PesquisasBase):
     data_registro_tse: Mapped[date | None] = mapped_column(Date, nullable=True)
     data_divulgacao: Mapped[date | None] = mapped_column(Date, nullable=True)
     id_municipio: Mapped[int] = mapped_column(
-        Integer, ForeignKey("municipios.id_municipio"), nullable=False
+        Integer, ForeignKey("geo_municipios.id_municipio"), nullable=False
     )
     id_amostra: Mapped[int] = mapped_column(
-        Integer, ForeignKey("amostras.id_amostra"), nullable=False
+        Integer, ForeignKey("pesq_amostras.id_amostra"), nullable=False
     )
     id_profissional: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profissionais.id_profissional"), nullable=False
+        Integer, ForeignKey("campo_profissionais.id_profissional"), nullable=False
     )
     id_usuario: Mapped[int] = mapped_column(
-        Integer, ForeignKey("usuarios.id_usuario"), nullable=False
+        Integer, ForeignKey("sys_usuarios.id_usuario"), nullable=False
     )
     id_usuario_criador: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("usuarios.id_usuario"), nullable=True
+        Integer, ForeignKey("sys_usuarios.id_usuario"), nullable=True
     )
     id_organizacao: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_bloqueada: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -8,12 +8,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 
 profissionais_router = APIRouter(
     prefix="/pesquisas-tabelas/profissionais",
     tags=["Profissionais de Campo"],
 )
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
 
 class ProfissionalCreateIn(BaseModel):
@@ -27,26 +29,35 @@ class ProfissionalCreateIn(BaseModel):
 
 
 @profissionais_router.get("", summary="Lista profissionais da tabela 'profissionais'")
-async def list_profissionais(session: DbSessionDep, limit: int = 100) -> list[dict]:
+async def list_profissionais(
+    session: DbSessionDep,
+    tenant: TenantDep,
+    limit: int = 100,
+) -> list[dict]:
     res = await session.execute(
         text("""
             SELECT id_profissional, nome, registro_profissional, cpf_cnpj,
                    especialidade, tipo_profissional, telefone, ativo,
                    id_organizacao, dispositivo_uuid, ultimo_login
-            FROM profissionais
+            FROM campo_profissionais
+            WHERE id_organizacao = :tid
             ORDER BY id_profissional ASC
             LIMIT :lim
         """),
-        {"lim": limit},
+        {"tid": tenant.tenant_id, "lim": limit},
     )
     return [dict(r._mapping) for r in res.fetchall()]
 
 
 @profissionais_router.post("", status_code=status.HTTP_201_CREATED, summary="Cadastra novo profissional")
-async def create_profissional(payload: ProfissionalCreateIn, session: DbSessionDep) -> dict:
+async def create_profissional(
+    payload: ProfissionalCreateIn,
+    session: DbSessionDep,
+    tenant: TenantDep,
+) -> dict:
     res = await session.execute(
         text("""
-            INSERT INTO profissionais (
+            INSERT INTO campo_profissionais (
                 nome, cpf_cnpj, especialidade, tipo_profissional,
                 telefone, dispositivo_uuid, ativo, id_organizacao,
                 tentativas_falhas, exige_troca_senha
@@ -67,7 +78,7 @@ async def create_profissional(payload: ProfissionalCreateIn, session: DbSessionD
             "tipo": payload.tipo_profissional.strip(),
             "tel": payload.telefone,
             "disp": payload.dispositivo_uuid,
-            "id_org": payload.id_organizacao,
+            "id_org": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -83,7 +94,7 @@ async def update_profissional(
 ) -> dict:
     res = await session.execute(
         text("""
-            UPDATE profissionais
+            UPDATE campo_profissionais
             SET nome = :nome,
                 cpf_cnpj = :cpf,
                 especialidade = :esp,
@@ -114,7 +125,7 @@ async def update_profissional(
 async def toggle_profissional_status(id_profissional: int, session: DbSessionDep) -> dict:
     res = await session.execute(
         text("""
-            UPDATE profissionais
+            UPDATE campo_profissionais
             SET ativo = NOT ativo
             WHERE id_profissional = :id_p
             RETURNING id_profissional, nome, ativo

@@ -73,7 +73,7 @@ async def login(
         )
 
     rev_res = await session.execute(
-        text("SELECT revogado FROM usuarios WHERE id_usuario = :id_u"),
+        text("SELECT revogado FROM sys_usuarios WHERE id_usuario = :id_u"),
         {"id_u": auth_data["id_usuario"]},
     )
     if bool(rev_res.scalar()):
@@ -118,6 +118,7 @@ async def login(
         "user": {
             "id_usuario": auth_data["id_usuario"],
             "id_organizacao": auth_data["id_organizacao"],
+            "tenant_id": auth_data["id_organizacao"],
             "full_name": auth_data["nome_usuario"],
             "email": auth_data["email_usuario"],
             "role": auth_data["cargo"],
@@ -145,6 +146,7 @@ async def get_me(request: Request) -> dict:
     return {
         "id_usuario": claims.get("id_usuario"),
         "id_organizacao": claims.get("tenant_id"),
+        "tenant_id": claims.get("tenant_id"),
         "full_name": claims.get("nome"),
         "email": claims.get("email"),
         "role": claims.get("cargo"),

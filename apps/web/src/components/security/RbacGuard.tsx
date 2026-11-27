@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { useUiSessionStore } from "../../lib/store";
 
 export type AppRole =
   | "ADMIN_SISTEMA"
@@ -6,7 +7,23 @@ export type AppRole =
   | "COORDENADOR_CAMPO"
   | "PESQUISADOR_CAMPO"
   | "ANALISTA_TABULACAO"
-  | "AUDITOR_TSE";
+  | "AUDITOR_TSE"
+  | "VISITANTE";
+
+export function mapDbRoleToAppRole(role?: string | null): AppRole {
+  const r = (role ?? "").trim().toLowerCase();
+  if (!r) return "VISITANTE";
+  if (r === "admin_sistema" || r.includes("master") || r.includes("admin") || r.includes("diretor")) {
+    return "ADMIN_SISTEMA";
+  }
+  if (r === "estatistico_responsavel" || r.includes("estat")) return "ESTATISTICO_RESPONSAVEL";
+  if (r === "coordenador_campo" || r.includes("coord") || r.includes("superv")) return "COORDENADOR_CAMPO";
+  if (r === "analista_tabulacao" || r.includes("analista") || r.includes("tabul")) return "ANALISTA_TABULACAO";
+  if (r === "auditor_tse" || r.includes("auditor")) return "AUDITOR_TSE";
+  if (r === "pesquisador_campo" || r.includes("pesquisador")) return "PESQUISADOR_CAMPO";
+  if (r === "visitante" || r.includes("visit") || r.includes("viewer")) return "VISITANTE";
+  return "VISITANTE";
+}
 
 export interface RoleInfo {
   readonly code: AppRole;
@@ -52,6 +69,12 @@ export const APP_ROLES: readonly RoleInfo[] = [
     badgeColor: "#dc2626",
     description: "Inspeção de hashes SHA-256, telemetria GPS e expurgos",
   },
+  {
+    code: "VISITANTE",
+    label: "Visualizador / Acesso Mínimo",
+    badgeColor: "#64748b",
+    description: "Acesso restrito somente leitura sem permissões administrativas",
+  },
 ];
 
 interface RbacContextValue {
@@ -69,7 +92,16 @@ export function RbacProvider({
   readonly children: React.ReactNode;
   readonly initialRole?: AppRole;
 }): React.JSX.Element {
-  const [currentRole, setCurrentRole] = useState<AppRole>(initialRole);
+  const sessionRole = useUiSessionStore((state) => state.currentUser?.role);
+  const [currentRole, setCurrentRole] = useState<AppRole>(
+    sessionRole ? mapDbRoleToAppRole(sessionRole) : initialRole,
+  );
+
+  useEffect(() => {
+    if (sessionRole) {
+      setCurrentRole(mapDbRoleToAppRole(sessionRole));
+    }
+  }, [sessionRole]);
 
   const value = useMemo<RbacContextValue>(() => {
     return {

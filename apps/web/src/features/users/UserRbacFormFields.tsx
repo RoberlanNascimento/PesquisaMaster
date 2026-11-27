@@ -2,6 +2,7 @@ import React from "react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { NOCTURNE_TOKENS } from "../../lib/designTokens";
 import type { UserAccountFormData } from "./usersRbacData";
+import type { AccessLevelOption } from "./useRbacUsersApi";
 
 const { colors } = NOCTURNE_TOKENS;
 
@@ -27,9 +28,14 @@ export const USER_RBAC_LABEL_STYLE: React.CSSProperties = {
 interface UserRbacFormFieldsProps {
   readonly register: UseFormRegister<UserAccountFormData>;
   readonly errors: FieldErrors<UserAccountFormData>;
+  readonly accessLevels: readonly AccessLevelOption[];
 }
 
-export function UserRbacFormFields({ register, errors }: UserRbacFormFieldsProps): React.JSX.Element {
+export function UserRbacFormFields({
+  register,
+  errors,
+  accessLevels,
+}: UserRbacFormFieldsProps): React.JSX.Element {
   return (
     <>
       <div>
@@ -57,6 +63,22 @@ export function UserRbacFormFields({ register, errors }: UserRbacFormFieldsProps
       </div>
 
       <div>
+        <label style={USER_RBAC_LABEL_STYLE}>Nível de Acesso (Banco de Dados) *</label>
+        <select
+          data-testid="select-nivel-acesso"
+          {...register("idNivelAcesso")}
+          style={USER_RBAC_INPUT_STYLE}
+        >
+          <option value="">Selecione o nível de acesso...</option>
+          {accessLevels.map((lvl) => (
+            <option key={lvl.id_nivel_acesso} value={lvl.id_nivel_acesso}>
+              {lvl.nome} (Hierarquia {lvl.nivel_hierarquia})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
         <label style={USER_RBAC_LABEL_STYLE}>Papel RBAC Oficial *</label>
         <select {...register("role")} style={USER_RBAC_INPUT_STYLE}>
           <option value="ADMIN_SISTEMA">Administrador do Sistema</option>
@@ -65,6 +87,7 @@ export function UserRbacFormFields({ register, errors }: UserRbacFormFieldsProps
           <option value="PESQUISADOR_CAMPO">Pesquisador de Campo</option>
           <option value="ANALISTA_TABULACAO">Analista de Tabulação</option>
           <option value="AUDITOR_TSE">Auditor Externo / TSE</option>
+          <option value="VISITANTE">Visualizador / Acesso Mínimo</option>
         </select>
       </div>
 

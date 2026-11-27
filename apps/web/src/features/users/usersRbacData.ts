@@ -8,6 +8,8 @@ export interface UserAccountRecord {
   readonly role: AppRole;
   readonly conreOrCred: string;
   readonly isActive: boolean;
+  readonly isMasterOwner?: boolean;
+  readonly photoUrl?: string | null;
   readonly boundDeviceId: string | null;
   readonly lastLoginAt: string;
   readonly auditChainHash: string;
@@ -23,7 +25,9 @@ export const userAccountSchema = z.object({
     "PESQUISADOR_CAMPO",
     "ANALISTA_TABULACAO",
     "AUDITOR_TSE",
+    "VISITANTE",
   ]),
+  idNivelAcesso: z.union([z.number(), z.string()]).optional(),
   conreOrCred: z.string().min(2, "Credencial ou Registro obrigatório"),
   boundDeviceId: z.string().optional(),
 });

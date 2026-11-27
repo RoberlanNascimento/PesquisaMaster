@@ -23,9 +23,11 @@ from src.modules.pesquisas.schemas import (
     PesquisaUpdate,
     ProfissionalOut,
 )
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 
 router = APIRouter(prefix="/pesquisas", tags=["Banco de Dados Pesquisas (PostgreSQL)"])
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
 
 @router.get(
@@ -46,12 +48,15 @@ async def get_db_health(session: DbSessionDep) -> DbHealthOut:
 )
 async def list_pesquisas(
     session: DbSessionDep,
+    tenant: TenantDep,
     search: Annotated[str | None, Query(description="Busca textual por nome")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Sequence[PesquisaDbModel]:
     repo = PesquisasRepository(session)
-    return await repo.list_pesquisas(search=search, limit=limit, offset=offset)
+    return await repo.list_pesquisas(
+        search=search, limit=limit, offset=offset, tenant_id=tenant.tenant_id
+    )
 
 
 @router.get(
@@ -69,9 +74,9 @@ async def list_municipios(session: DbSessionDep) -> Sequence[MunicipioDbModel]:
     response_model=list[AmostraOut],
     summary="Lista planos amostrais",
 )
-async def list_amostras(session: DbSessionDep) -> Sequence[AmostraDbModel]:
+async def list_amostras(session: DbSessionDep, tenant: TenantDep) -> Sequence[AmostraDbModel]:
     repo = PesquisasRepository(session)
-    return await repo.list_amostras()
+    return await repo.list_amostras(tenant_id=tenant.tenant_id)
 
 
 @router.get(
@@ -79,9 +84,11 @@ async def list_amostras(session: DbSessionDep) -> Sequence[AmostraDbModel]:
     response_model=list[ProfissionalOut],
     summary="Lista profissionais",
 )
-async def list_profissionais(session: DbSessionDep) -> Sequence[ProfissionalDbModel]:
+async def list_profissionais(
+    session: DbSessionDep, tenant: TenantDep
+) -> Sequence[ProfissionalDbModel]:
     repo = PesquisasRepository(session)
-    return await repo.list_profissionais()
+    return await repo.list_profissionais(tenant_id=tenant.tenant_id)
 
 
 @router.get(
@@ -89,9 +96,11 @@ async def list_profissionais(session: DbSessionDep) -> Sequence[ProfissionalDbMo
     response_model=PesquisaOut,
     summary="Obtém detalhes de uma pesquisa",
 )
-async def get_pesquisa(id_pesquisa: int, session: DbSessionDep) -> PesquisaDbModel:
+async def get_pesquisa(
+    id_pesquisa: int, session: DbSessionDep, tenant: TenantDep
+) -> PesquisaDbModel:
     repo = PesquisasRepository(session)
-    item = await repo.get_by_id(id_pesquisa)
+    item = await repo.get_by_id(id_pesquisa, tenant_id=tenant.tenant_id)
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pesquisa não encontrada."
@@ -105,9 +114,11 @@ async def get_pesquisa(id_pesquisa: int, session: DbSessionDep) -> PesquisaDbMod
     status_code=status.HTTP_201_CREATED,
     summary="Cadastra nova pesquisa",
 )
-async def create_pesquisa(payload: PesquisaCreate, session: DbSessionDep) -> PesquisaDbModel:
+async def create_pesquisa(
+    payload: PesquisaCreate, session: DbSessionDep, tenant: TenantDep
+) -> PesquisaDbModel:
     repo = PesquisasRepository(session)
-    return await repo.create(payload)
+    return await repo.create(payload, tenant_id=tenant.tenant_id, user_id=tenant.user_id)
 
 
 @router.put(
@@ -116,10 +127,10 @@ async def create_pesquisa(payload: PesquisaCreate, session: DbSessionDep) -> Pes
     summary="Atualiza dados da pesquisa",
 )
 async def update_pesquisa(
-    id_pesquisa: int, payload: PesquisaUpdate, session: DbSessionDep
+    id_pesquisa: int, payload: PesquisaUpdate, session: DbSessionDep, tenant: TenantDep
 ) -> PesquisaDbModel:
     repo = PesquisasRepository(session)
-    item = await repo.update(id_pesquisa, payload)
+    item = await repo.update(id_pesquisa, payload, tenant_id=tenant.tenant_id)
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pesquisa não encontrada."
@@ -135,11 +146,14 @@ async def update_pesquisa(
 async def toggle_bloqueio(
     id_pesquisa: int,
     session: DbSessionDep,
+    tenant: TenantDep,
     is_bloqueada: Annotated[bool, Query()],
     motivo: Annotated[str | None, Query()] = None,
 ) -> PesquisaDbModel:
     repo = PesquisasRepository(session)
-    item = await repo.set_bloqueio(id_pesquisa, is_bloqueada=is_bloqueada, motivo=motivo)
+    item = await repo.set_bloqueio(
+        id_pesquisa, is_bloqueada=is_bloqueada, motivo=motivo, tenant_id=tenant.tenant_id
+    )
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pesquisa não encontrada."

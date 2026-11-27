@@ -38,7 +38,7 @@ async def list_estados(
     regiao: Annotated[str | None, Query(description="Filtro por macrorregião")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[dict[str, Any]]:
-    sql = "SELECT * FROM estados WHERE 1=1"
+    sql = "SELECT * FROM geo_estados WHERE 1=1"
     params: dict[str, Any] = {"lim": limit}
     if q and q.strip():
         sql += " AND (UPPER(sigla) LIKE :q OR LOWER(nome) LIKE :ql)"
@@ -55,7 +55,7 @@ async def list_estados(
 @estados_router.get("/{id_estado}", summary="Obtém detalhes de um estado")
 async def get_estado(id_estado: int, session: DbSessionDep) -> dict[str, Any]:
     res = await session.execute(
-        text("SELECT * FROM estados WHERE id_estado = :id"), {"id": id_estado}
+        text("SELECT * FROM geo_estados WHERE id_estado = :id"), {"id": id_estado}
     )
     row = res.fetchone()
     if not row:
@@ -66,7 +66,7 @@ async def get_estado(id_estado: int, session: DbSessionDep) -> dict[str, Any]:
 @estados_router.post("", status_code=status.HTTP_201_CREATED, summary="Cadastra novo estado")
 async def create_estado(payload: EstadoCreate, session: DbSessionDep) -> dict[str, Any]:
     query = text(
-        "INSERT INTO estados (sigla, nome, codigo_ibge, regiao, populacao_total, eleitorado_total) "
+        "INSERT INTO geo_estados (sigla, nome, codigo_ibge, regiao, populacao_total, eleitorado_total) "
         "VALUES (:sigla, :nome, :codigo_ibge, :regiao, :populacao_total, :eleitorado_total) "
         "RETURNING *"
     )
@@ -93,7 +93,7 @@ async def update_estado(
     id_estado: int, payload: EstadoUpdate, session: DbSessionDep
 ) -> dict[str, Any]:
     current_res = await session.execute(
-        text("SELECT * FROM estados WHERE id_estado = :id"), {"id": id_estado}
+        text("SELECT * FROM geo_estados WHERE id_estado = :id"), {"id": id_estado}
     )
     current = current_res.fetchone()
     if not current:
@@ -101,7 +101,7 @@ async def update_estado(
     cur_map = dict(current._mapping)
 
     query = text(
-        "UPDATE estados SET sigla = :sigla, nome = :nome, codigo_ibge = :codigo_ibge, "
+        "UPDATE geo_estados SET sigla = :sigla, nome = :nome, codigo_ibge = :codigo_ibge, "
         "regiao = :regiao, populacao_total = :populacao_total, "
         "eleitorado_total = :eleitorado_total "
         "WHERE id_estado = :id RETURNING *"
@@ -145,7 +145,7 @@ async def update_estado(
 @estados_router.delete("/{id_estado}", summary="Remove estado")
 async def delete_estado(id_estado: int, session: DbSessionDep) -> dict[str, Any]:
     res = await session.execute(
-        text("DELETE FROM estados WHERE id_estado = :id RETURNING id_estado"), {"id": id_estado}
+        text("DELETE FROM geo_estados WHERE id_estado = :id RETURNING id_estado"), {"id": id_estado}
     )
     deleted = res.fetchone()
     if not deleted:

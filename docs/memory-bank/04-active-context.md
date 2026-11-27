@@ -38,47 +38,47 @@
   - **TELA 9 (`/regioes/pais`, `/regioes/estados`, `/regioes/municipios`, `/regioes-municipais`, `/regioes/bairros`, `/geografia/demografia-ibge`, `/geografia/eleitorado-tse`):** Hierarquia Territorial & Zonas Municipais (`CountriesCrudScreen.tsx`, `StatesCrudScreen.tsx`, `MunicipalitiesCrudScreen.tsx`, `MunicipalRegionsFeature.tsx` conectado a `regiao_zonas`, `NeighborhoodsCrudScreen.tsx`, `DemographyIbgeFeature.tsx`, `ElectorateTseFeature.tsx`).
   - **TELA 10 (`/catalogo/*`):** Catálogos de Candidatos/Produtos, Perguntas, Itens de Bateria, Escalas e Opções de Resposta.
 
-- **Mapeamento das 34 Tabelas do Banco de Dados PostgreSQL (`pesquisas`) e Telas Dedicadas:**
-  - **Pilar 1 (Geografia e Censitário):**
-    - `municipios`: `/regioes/municipios` (`MunicipalitiesCrudScreen.tsx`)
-    - `regiao_zonas`: `/regioes-municipais` (`MunicipalRegionsFeature.tsx`)
-    - `bairros_ibge`: `/regioes/bairros` (`NeighborhoodsCrudScreen.tsx`)
-    - `demografia_ibge`: `/censo/demografia` (`DemographicsFeature.tsx`)
-    - `eleitorado_tse`: `/censo/eleitorado` (`ElectorateTseFeature.tsx`)
-  - **Pilar 2 (Amostras):**
-    - `amostras`: `/plano-amostral` (`SamplingQuotasFeature.tsx`)
-    - `amostras_dimensao`: `/amostras/dimensoes` (`SampleDimensionsFeature.tsx`)
-    - `amostras_cotas`: `/amostras/cotas` (`SampleQuotasFeature.tsx`)
-  - **Pilar 3 (Pesquisas):**
-    - `pesquisas`: `/pesquisas` (`SurveysManagementFeature.tsx`)
-    - `candidatos_produtos`: `/catalogo/candidatos` (`CandidatesCatalogFeature.tsx`)
-    - `cenarios_pesquisa`: `/pesquisas/cenarios` (`ScenariosCatalogFeature.tsx`)
-    - `cenario_candidatos`: `/pesquisas/cenario-candidatos` (`ScenarioCandidatesFeature.tsx`)
-  - **Pilar 4 (Questionários):**
-    - `grupos_opcoes`: `/catalogo/escalas` (`ScalesCatalogFeature.tsx`)
-    - `opcoes_resposta`: `/catalogo/opcoes-resposta` (`AnswerOptionsCatalogFeature.tsx`)
-    - `perguntas`: `/catalogo/perguntas` (`QuestionsCatalogFeature.tsx`)
-    - `itens_bateria`: `/catalogo/itens-bateria` (`BatteryItemsCatalogFeature.tsx`)
-    - `questionarios`: `/questionarios` (`QuestionnairesBuilderFeature.tsx`)
-    - `questionario_perguntas`: `/composicao-pesquisas` (`SurveyCompositionFeature.tsx`)
-  - **Pilar 5 (Administração, RBAC & Campo):**
-    - `organizacoes`: `/clientes` (`ClientCompanyRegistrationFeature.tsx`)
-    - `papeis_rbac`: `/usuarios-rbac` (`RbacUsersFeature.tsx`)
-    - `permissoes_rbac`: `/usuarios-rbac` (`RolePermissionsModal.tsx`)
-    - `papel_permissoes`: `/usuarios-rbac` (`RolePermissionsModal.tsx`)
-    - `usuarios`: `/usuarios-rbac` (`RbacUsersFeature.tsx`)
-    - `sessoes_refresh_tokens`: `/pesquisadores` (`CampoOperacoesFeature.tsx`)
-    - `logs_autenticacao`: `/pesquisadores` (`CampoOperacoesFeature.tsx`)
-    - `profissionais`: `/cadastros/profissionais` (`ProfessionalsFeature.tsx`)
-    - `atribuicao_pesquisadores`: `/pesquisadores` (`ResearchersManagementFeature.tsx`)
-    - `transferencias_atribuicao`: `/logistica/transferencia-saldo` (`FieldTransferFeature.tsx`)
-    - `historico_reatribuicao_questionarios`: `/auditoria/reatribuicoes` (`ReassignmentHistoryFeature.tsx`)
-    - `historico_desbloqueio_pesquisas`: `/auditoria/desbloqueios` (`UnlockHistoryFeature.tsx`)
-  - **Pilar 6 (Tabulação e Coleta):**
-    - `pessoas`: `/coleta/entrevistados` (`InterviewsAuditFeature.tsx`)
-    - `questionarios_pessoas`: `/homologacao-campo` (`FieldHomologationFeature.tsx`)
-    - `respostas`: `/auditoria/respostas` (`AnswersFeature.tsx`)
-    - `relatorios_tabulacao`: `/tabulacao/relatorios` (`TabulationReportsFeature.tsx`)
+- **Padronização Física das Tabelas PostgreSQL (`pesquisas`) nos 5 Grupos de Prefixos (`sys_*`, `geo_*`, `form_*`, `pesq_*`, `campo_*`) e Telas Dedicadas:**
+  - **Grupo `geo_*` (Geografia e Censitário):**
+    - `geo_estados`: `/regioes/estados` (`StatesCrudScreen.tsx`)
+    - `geo_municipios`: `/regioes/municipios` (`MunicipalitiesCrudScreen.tsx`)
+    - `geo_regiao_zonas`: `/regioes-municipais` (`MunicipalRegionsFeature.tsx`)
+    - `geo_bairros_ibge`: `/regioes/bairros` (`NeighborhoodsCrudScreen.tsx`)
+    - `geo_demografia_ibge`: `/censo/demografia` (`DemographicsFeature.tsx`)
+    - `geo_eleitorado_tse`: `/censo/eleitorado` (`ElectorateTseFeature.tsx`)
+  - **Grupo `pesq_*` (Amostras, Pesquisas, Cenários & Relatórios):**
+    - `pesq_amostras`: `/plano-amostral` (`SamplingQuotasFeature.tsx`)
+    - `pesq_amostras_dimensao`: `/amostras/dimensoes` (`SampleDimensionsFeature.tsx`)
+    - `pesq_amostras_cotas`: `/amostras/cotas` (`SampleQuotasFeature.tsx`)
+    - `pesq_pesquisas`: `/pesquisas` (`SurveysManagementFeature.tsx`)
+    - `pesq_candidatos_produtos`: `/catalogo/candidatos` (`CandidatesCatalogFeature.tsx`)
+    - `pesq_cenarios_pesquisa`: `/pesquisas/cenarios` (`ScenariosCatalogFeature.tsx`)
+    - `pesq_cenario_candidatos`: `/pesquisas/cenario-candidatos` (`ScenarioCandidatesFeature.tsx`)
+    - `pesq_relatorios_tabulacao`: `/tabulacao/relatorios` (`TabulationReportsFeature.tsx`)
+  - **Grupo `form_*` (Formulários & Questionários):**
+    - `form_perguntas_grupos_opcoes`: `/catalogo/escalas` (`ScalesCatalogFeature.tsx`)
+    - `form_opcoes_resposta`: `/catalogo/opcoes-resposta` (`AnswerOptionsCatalogFeature.tsx`)
+    - `form_perguntas`: `/catalogo/perguntas` (`QuestionsCatalogFeature.tsx`)
+    - `form_perguntas_itens_bateria`: `/catalogo/itens-bateria` (`BatteryItemsCatalogFeature.tsx`)
+    - `form_questionarios`: `/questionarios` (`QuestionnairesBuilderFeature.tsx`)
+    - `form_questionario_perguntas`: `/composicao-pesquisas` (`SurveyCompositionFeature.tsx`)
+  - **Grupo `sys_*` (Sistema, Multi-Tenant, RBAC & Auditoria):**
+    - `sys_organizacoes`: `/clientes` (`ClientCompanyRegistrationFeature.tsx`)
+    - `sys_papeis_rbac`: `/usuarios-rbac` (`RbacUsersFeature.tsx`)
+    - `sys_permissoes_rbac`: `/usuarios-rbac` (`RolePermissionsModal.tsx`)
+    - `sys_papel_permissoes`: `/usuarios-rbac` (`RolePermissionsModal.tsx`)
+    - `sys_usuarios`: `/usuarios-rbac` (`RbacUsersFeature.tsx`)
+    - `sys_sessoes_refresh_tokens`: `/pesquisadores` (`CampoOperacoesFeature.tsx`)
+    - `sys_logs_autenticacao`: `/pesquisadores` (`CampoOperacoesFeature.tsx`)
+    - `sys_historico_desbloqueio_pesquisas`: `/auditoria/desbloqueios` (`UnlockHistoryFeature.tsx`)
+  - **Grupo `campo_*` (Equipe de Campo, Atribuições & Coleta):**
+    - `campo_profissionais`: `/cadastros/profissionais` (`ProfessionalsFeature.tsx`)
+    - `campo_atribuicao_pesquisadores`: `/pesquisadores` (`ResearchersManagementFeature.tsx`)
+    - `campo_transferencias_atribuicao`: `/logistica/transferencia-saldo` (`FieldTransferFeature.tsx`)
+    - `campo_historico_reatribuicao_questionarios`: `/auditoria/reatribuicoes` (`ReassignmentHistoryFeature.tsx`)
+    - `campo_pessoas`: `/coleta/entrevistados` (`InterviewsAuditFeature.tsx`)
+    - `campo_questionarios_pessoas`: `/homologacao-campo` (`FieldHomologationFeature.tsx`)
+    - `campo_respostas`: `/auditoria/respostas` (`AnswersFeature.tsx`)
 
 ## 3. Próximos Passos Imediatos
 - Todas as 34 tabelas do banco de dados e os 6 Pilares de Domínio (`01-project-brief.md`) possuem telas dedicadas, rotas no roteador do cliente, endpoints backend assíncronos e itens nos menus de navegação (`PRIMARY_NAV_ITEMS` e `SidebarSettingsDropdown.tsx`).

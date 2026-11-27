@@ -4,7 +4,9 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, MetaData, func
+import jwt
+from fastapi import Request
+from sqlalchemy import DateTime, MetaData, func, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -69,7 +71,48 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependência FastAPI que fornece uma AsyncSession por requisição."""
+_VALID_PG_ROLES = {"pesquisador", "auditor", "estatistico", "administrador", "anonimo"}
+
+
+def _resolve_session_context(request: Request) -> tuple[int, str, int]:
+    """Resolve (tenant_id, pg_role, actor_id) a partir do JWT Bearer quando presente."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return 1, "administrador", 1
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        return 1, "administrador", 1
+    settings = get_settings()
+    try:
+        claims = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except Exception:
+        return 1, "administrador", 1
+
+    raw_tid = claims.get("tenant_id") or claims.get("id_organizacao") or 1
+    raw_uid = claims.get("id_usuario") or claims.get("sub") or 1
+    raw_cargo = str(claims.get("cargo") or claims.get("role") or "administrador").strip().lower()
+    pg_role = raw_cargo if raw_cargo in _VALID_PG_ROLES else "administrador"
+    try:
+        tid = int(raw_tid)
+    except (TypeError, ValueError):
+        tid = 1
+    try:
+        uid = int(raw_uid)
+    except (TypeError, ValueError):
+        uid = 1
+    return tid, pg_role, uid
+
+
+async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    """Dependência FastAPI que fornece uma AsyncSession com contexto multi-tenant no PostgreSQL."""
+    tenant_id, pg_role, actor_id = _resolve_session_context(request)
     async with AsyncSessionLocal() as session:
+        await session.execute(
+            text("SELECT public.fn_definir_contexto_sessao(:tid, :role, :uid, 'usuario')"),
+            {"tid": tenant_id, "role": pg_role, "uid": actor_id},
+        )
         yield session

@@ -65,6 +65,19 @@ const getStoredAuthUser = (): AuthUser | null => {
   return null;
 };
 
+export const getAuthToken = (): string | null => {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("pm_auth_token");
+    if (stored) return stored;
+  }
+  return useUiSessionStore.getState().currentUser?.token ?? null;
+};
+
+export const getAuthHeaders = (): Record<string, string> => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 const initialStoredUser = getStoredAuthUser();
 
 interface UiSessionState {
@@ -139,11 +152,26 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
               nome_organizacao?: string;
             };
           };
+          const rawRole = (data.user.role ?? "").trim().toLowerCase();
+          const mappedRole =
+            rawRole.includes("master") || rawRole.includes("admin")
+              ? "ADMIN_SISTEMA"
+              : rawRole.includes("estat")
+                ? "ESTATISTICO_RESPONSAVEL"
+                : rawRole.includes("coord")
+                  ? "COORDENADOR_CAMPO"
+                  : rawRole.includes("analista") || rawRole.includes("tabul")
+                    ? "ANALISTA_TABULACAO"
+                    : rawRole.includes("auditor")
+                      ? "AUDITOR_TSE"
+                      : rawRole.includes("pesquisador")
+                        ? "PESQUISADOR_CAMPO"
+                        : "VISITANTE";
           const user: AuthUser = {
             id: String(data.user.id_usuario ?? data.user.id ?? ""),
             email: data.user.email,
             fullName: data.user.full_name,
-            role: "ADMIN",
+            role: mappedRole,
             roleLabel: data.user.role,
             tenantId: String(data.user.id_organizacao ?? data.user.tenant_id ?? "1"),
             tenantName: data.user.nome_organizacao ?? "Instituto PesquisaMaster",
@@ -153,6 +181,7 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
             localStorage.setItem("pm_auth_user", JSON.stringify(user));
             localStorage.setItem("pm_auth_token", data.access_token);
           }
+          queryClient.clear();
           set({
             isAuthenticated: true,
             currentUser: user,
@@ -178,7 +207,57 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
       const user = MOCK_USER_IWCOSTA;
       if (typeof window !== "undefined") {
         localStorage.setItem("pm_auth_user", JSON.stringify(user));
+        localStorage.setItem("pm_auth_token", user.token);
       }
+      set({
+        isAuthenticated: true,
+        currentUser: user,
+        activeTenantId: user.tenantId,
+        connectedUserName: user.fullName,
+        connectedUserRoleLabel: user.roleLabel,
+      });
+      return { success: true };
+    }
+    if (isTestEnv && normEmail === "admin@institutoveritas.com.br" && pass === "123456") {
+      const user: AuthUser = {
+        id: "user-veritas-admin",
+        email: "admin@institutoveritas.com.br",
+        fullName: "Admin Instituto Veritas",
+        role: "ADMIN",
+        roleLabel: "Administrador",
+        tenantId: "2",
+        tenantName: "Instituto Veritas",
+        token: "jwt-veritas-admin-2026-tse",
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pm_auth_user", JSON.stringify(user));
+        localStorage.setItem("pm_auth_token", user.token);
+      }
+      set({
+        isAuthenticated: true,
+        currentUser: user,
+        activeTenantId: user.tenantId,
+        connectedUserName: user.fullName,
+        connectedUserRoleLabel: user.roleLabel,
+      });
+      return { success: true };
+    }
+    if (isTestEnv && normEmail === "visitante@dataopinion.com.br" && pass === "123456") {
+      const user: AuthUser = {
+        id: "user-visitante-min",
+        email: "visitante@dataopinion.com.br",
+        fullName: "Lucas Visitante",
+        role: "VISITANTE",
+        roleLabel: "visitante",
+        tenantId: "1",
+        tenantName: "DataOpinion Matriz",
+        token: "jwt-visitante-min-2026-tse",
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pm_auth_user", JSON.stringify(user));
+        localStorage.setItem("pm_auth_token", user.token);
+      }
+      queryClient.clear();
       set({
         isAuthenticated: true,
         currentUser: user,
@@ -198,6 +277,7 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
       localStorage.removeItem("pm_auth_user");
       localStorage.removeItem("pm_auth_token");
     }
+    queryClient.clear();
     set({
       isAuthenticated: false,
       currentUser: null,

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
 
 amostragem_router = APIRouter(
     prefix="/api/v1/amostragem",
@@ -97,15 +98,17 @@ def _hare_niemeyer(total: int, weights: list[float]) -> list[int]:
 @amostragem_router.get("/opcoes")
 async def get_amostragem_opcoes(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     muns = await session.execute(
         text(
             """
             SELECT m.id_municipio, m.codigo_ibge, m.codigo_tse, m.nome, e.sigla AS uf,
                    COALESCE(m.populacao_total, 0) AS populacao_total,
                    COALESCE(m.eleitorado_total, 0) AS eleitorado_total
-            FROM municipios m
-            JOIN estados e ON e.id_estado = m.id_estado
+            FROM geo_municipios m
+            JOIN geo_estados e ON e.id_estado = m.id_estado
             ORDER BY m.nome ASC
             """
         )
@@ -118,12 +121,14 @@ async def get_amostragem_opcoes(
                    a.z_score, a.tamanho_amostral, a.metodo_alocacao,
                    a.id_eleitorado_tse, a.calculado_em,
                    m.nome AS municipio_nome, e.sigla AS uf
-            FROM amostras a
-            LEFT JOIN municipios m ON m.id_municipio = a.id_municipio
-            LEFT JOIN estados e ON e.id_estado = m.id_estado
+            FROM pesq_amostras a
+            LEFT JOIN geo_municipios m ON m.id_municipio = a.id_municipio
+            LEFT JOIN geo_estados e ON e.id_estado = m.id_estado
+            WHERE a.id_organizacao = :tid
             ORDER BY a.id_amostra DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     bairros = await session.execute(
         text(
@@ -131,7 +136,7 @@ async def get_amostragem_opcoes(
             SELECT id_bairro, id_municipio, nome_bairro,
                    COALESCE(eleitorado_total, 0) AS eleitorado_total,
                    COALESCE(populacao_total, 0) AS populacao_total
-            FROM bairros_ibge
+            FROM geo_bairros_ibge
             WHERE ativo = true
             ORDER BY nome_bairro ASC
             """
@@ -150,17 +155,20 @@ async def get_amostragem_opcoes(
                    et.hash_origem, et.id_organizacao,
                    m.nome AS municipio_nome, e.sigla AS uf,
                    b.nome_bairro, u.nome AS usuario_nome
-            FROM eleitorado_tse et
-            LEFT JOIN municipios m ON m.id_municipio = et.id_municipio
-            LEFT JOIN estados e ON e.id_estado = m.id_estado
-            LEFT JOIN bairros_ibge b ON b.id_bairro = et.id_bairro
-            LEFT JOIN usuarios u ON u.id_usuario = et.id_usuario_captura
+            FROM geo_eleitorado_tse et
+            LEFT JOIN geo_municipios m ON m.id_municipio = et.id_municipio
+            LEFT JOIN geo_estados e ON e.id_estado = m.id_estado
+            LEFT JOIN geo_bairros_ibge b ON b.id_bairro = et.id_bairro
+            LEFT JOIN sys_usuarios u ON u.id_usuario = et.id_usuario_captura
+            WHERE et.id_organizacao = :tid
             ORDER BY et.ano_referencia DESC, et.mes_referencia DESC, et.data_captura DESC, et.id_eleitorado_tse DESC
             """
-        )
+        ),
+        {"tid": tid},
     )
     usuarios = await session.execute(
-        text("SELECT id_usuario, nome FROM usuarios ORDER BY id_usuario ASC")
+        text("SELECT id_usuario, nome FROM sys_usuarios WHERE id_organizacao = :tid ORDER BY id_usuario ASC"),
+        {"tid": tid},
     )
     return {
         "municipios": [dict(r) for r in muns.mappings().all()],
@@ -184,9 +192,9 @@ async def list_municipios_db(
                    m.id_estado, e.sigla AS uf, e.nome AS estado_nome,
                    COALESCE(m.populacao_total, 0) AS populacao_total,
                    COALESCE(m.eleitorado_total, 0) AS eleitorado_total,
-                   (SELECT COUNT(*) FROM regiao_zonas rz WHERE rz.id_municipio = m.id_municipio) AS regioes_count
-            FROM municipios m
-            JOIN estados e ON e.id_estado = m.id_estado
+                   (SELECT COUNT(*) FROM geo_regiao_zonas rz WHERE rz.id_municipio = m.id_municipio) AS regioes_count
+            FROM geo_municipios m
+            JOIN geo_estados e ON e.id_estado = m.id_estado
             {where_sql}
             ORDER BY COALESCE(m.eleitorado_total, 0) DESC, m.nome ASC
             """
@@ -199,7 +207,9 @@ async def list_municipios_db(
 async def create_amostra(
     payload: AmostraCreateSchema,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     z_calc, calc_n = _calc_sample_size(
         payload.populacao_universo,
         payload.nivel_confianca,
@@ -212,14 +222,14 @@ async def create_amostra(
     res = await session.execute(
         text(
             """
-            INSERT INTO amostras (
+            INSERT INTO pesq_amostras (
                 id_municipio, descricao, nivel_confianca, margem_erro,
                 proporcao_esperada, populacao_universo, z_score,
                 tamanho_amostral, metodo_alocacao, id_eleitorado_tse, calculado_em, id_organizacao
             ) VALUES (
                 :id_municipio, :descricao, :nivel_confianca, :margem_erro,
                 :proporcao_esperada, :populacao_universo, :z_score,
-                :tamanho_amostral, :metodo_alocacao, :id_eleitorado_tse, NOW(), 1
+                :tamanho_amostral, :metodo_alocacao, :id_eleitorado_tse, NOW(), :tid
             )
             RETURNING id_amostra, id_municipio, descricao, tamanho_amostral, metodo_alocacao
             """
@@ -235,6 +245,7 @@ async def create_amostra(
             "tamanho_amostral": final_n,
             "metodo_alocacao": payload.metodo_alocacao,
             "id_eleitorado_tse": payload.id_eleitorado_tse,
+            "tid": tid,
         },
     )
     amostra_row = dict(res.mappings().first() or {})
@@ -246,7 +257,7 @@ async def create_amostra(
                 """
                 SELECT id_bairro, nome_bairro,
                        COALESCE(NULLIF(eleitorado_total, 0), NULLIF(populacao_total, 0), 1) AS peso
-                FROM bairros_ibge
+                FROM geo_bairros_ibge
                 WHERE id_municipio = :mid AND ativo = true
                 ORDER BY id_bairro ASC
                 """
@@ -255,7 +266,7 @@ async def create_amostra(
         )
         bairros_list = [dict(r) for r in bairro_res.mappings().all()]
         if not bairros_list:
-            any_b = await session.execute(text("SELECT id_bairro, nome_bairro, 1 AS peso FROM bairros_ibge ORDER BY id_bairro ASC LIMIT 1"))
+            any_b = await session.execute(text("SELECT id_bairro, nome_bairro, 1 AS peso FROM geo_bairros_ibge ORDER BY id_bairro ASC LIMIT 1"))
             bairros_list = [dict(r) for r in any_b.mappings().all()] or [{"id_bairro": 1, "nome_bairro": "Geral", "peso": 1}]
 
         pesos_bairros = [float(b["peso"]) for b in bairros_list]
@@ -268,12 +279,12 @@ async def create_amostra(
             dim_res = await session.execute(
                 text(
                     """
-                    INSERT INTO amostras_dimensao (id_amostra, nome_dimensao, fonte_dados, obrigatoria, ordem_exibicao, id_organizacao)
-                    VALUES (:id_amostra, :nome, :fonte, true, :ordem, 1)
+                    INSERT INTO pesq_amostras_dimensao (id_amostra, nome_dimensao, fonte_dados, obrigatoria, ordem_exibicao, id_organizacao)
+                    VALUES (:id_amostra, :nome, :fonte, true, :ordem, :tid)
                     RETURNING id_amostra_dimensao
                     """
                 ),
-                {"id_amostra": id_amostra, "nome": nome_dim, "fonte": fonte, "ordem": ordem},
+                {"id_amostra": id_amostra, "nome": nome_dim, "fonte": fonte, "ordem": ordem, "tid": tid},
             )
             id_dim = dim_res.scalar_one()
             allocs_cat = _hare_niemeyer(final_n, [c[1] for c in cats])
@@ -285,11 +296,11 @@ async def create_amostra(
                     await session.execute(
                         text(
                             """
-                            INSERT INTO amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
-                            VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, 1)
+                            INSERT INTO pesq_amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
+                            VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, :tid)
                             """
                         ),
-                        {"id_dim": id_dim, "id_bairro": b["id_bairro"], "cat": cat_name, "pct": pct, "qtd": qtd_b},
+                        {"id_dim": id_dim, "id_bairro": b["id_bairro"], "cat": cat_name, "pct": pct, "qtd": qtd_b, "tid": tid},
                     )
 
     await session.commit()
@@ -305,9 +316,9 @@ async def get_amostra_detalhes(
         text(
             """
             SELECT a.*, m.nome AS municipio_nome, e.sigla AS uf
-            FROM amostras a
-            LEFT JOIN municipios m ON m.id_municipio = a.id_municipio
-            LEFT JOIN estados e ON e.id_estado = m.id_estado
+            FROM pesq_amostras a
+            LEFT JOIN geo_municipios m ON m.id_municipio = a.id_municipio
+            LEFT JOIN geo_estados e ON e.id_estado = m.id_estado
             WHERE a.id_amostra = :id_amostra
             """
         ),
@@ -324,9 +335,9 @@ async def get_amostra_detalhes(
                    c.percentual_meta, c.quantidade_meta, c.quantidade_coletada,
                    d.nome_dimensao, d.fonte_dados,
                    b.nome_bairro
-            FROM amostras_cotas c
-            JOIN amostras_dimensao d ON d.id_amostra_dimensao = c.id_amostra_dimensao
-            LEFT JOIN bairros_ibge b ON b.id_bairro = c.id_bairro
+            FROM pesq_amostras_cotas c
+            JOIN pesq_amostras_dimensao d ON d.id_amostra_dimensao = c.id_amostra_dimensao
+            LEFT JOIN geo_bairros_ibge b ON b.id_bairro = c.id_bairro
             WHERE d.id_amostra = :id_amostra
             ORDER BY d.ordem_exibicao ASC, c.id_cota ASC
             """
@@ -344,22 +355,24 @@ async def create_cota_manual(
     id_amostra: int,
     payload: CotaCreateSchema,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
+    tid = tenant.tenant_id
     dim = await session.execute(
-        text("SELECT id_amostra_dimensao FROM amostras_dimensao WHERE id_amostra = :id_amostra AND nome_dimensao = :nome LIMIT 1"),
-        {"id_amostra": id_amostra, "nome": payload.nome_dimensao},
+        text("SELECT id_amostra_dimensao FROM pesq_amostras_dimensao WHERE id_amostra = :id_amostra AND nome_dimensao = :nome AND id_organizacao = :tid LIMIT 1"),
+        {"id_amostra": id_amostra, "nome": payload.nome_dimensao, "tid": tid},
     )
     id_dim = dim.scalar_one_or_none()
     if id_dim is None:
         new_dim = await session.execute(
             text(
                 """
-                INSERT INTO amostras_dimensao (id_amostra, nome_dimensao, fonte_dados, obrigatoria, ordem_exibicao, id_organizacao)
-                VALUES (:id_amostra, :nome, 'MANUAL', true, 10, 1)
+                INSERT INTO pesq_amostras_dimensao (id_amostra, nome_dimensao, fonte_dados, obrigatoria, ordem_exibicao, id_organizacao)
+                VALUES (:id_amostra, :nome, 'MANUAL', true, 10, :tid)
                 RETURNING id_amostra_dimensao
                 """
             ),
-            {"id_amostra": id_amostra, "nome": payload.nome_dimensao},
+            {"id_amostra": id_amostra, "nome": payload.nome_dimensao, "tid": tid},
         )
         id_dim = new_dim.scalar_one()
 
@@ -369,8 +382,8 @@ async def create_cota_manual(
             text(
                 """
                 SELECT b.id_bairro
-                FROM bairros_ibge b
-                JOIN amostras a ON a.id_municipio = b.id_municipio
+                FROM geo_bairros_ibge b
+                JOIN pesq_amostras a ON a.id_municipio = b.id_municipio
                 WHERE a.id_amostra = :id_amostra AND b.ativo = true
                 ORDER BY b.id_bairro ASC
                 LIMIT 1
@@ -383,8 +396,8 @@ async def create_cota_manual(
     res = await session.execute(
         text(
             """
-            INSERT INTO amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
-            VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, 1)
+            INSERT INTO pesq_amostras_cotas (id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada, id_organizacao)
+            VALUES (:id_dim, :id_bairro, :cat, :pct, :qtd, 0, :tid)
             RETURNING id_cota, id_amostra_dimensao, id_bairro, categoria, percentual_meta, quantidade_meta, quantidade_coletada
             """
         ),
@@ -394,6 +407,7 @@ async def create_cota_manual(
             "cat": payload.categoria,
             "pct": payload.percentual_meta,
             "qtd": payload.quantidade_meta,
+            "tid": tid,
         },
     )
     await session.commit()
@@ -409,7 +423,7 @@ async def update_cota(
     res = await session.execute(
         text(
             """
-            UPDATE amostras_cotas
+            UPDATE pesq_amostras_cotas
             SET percentual_meta = :pct, quantidade_meta = :qtd
             WHERE id_cota = :id_cota
             RETURNING id_cota, percentual_meta, quantidade_meta
@@ -429,7 +443,7 @@ async def delete_cota(
     id_cota: int,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    await session.execute(text("DELETE FROM amostras_cotas WHERE id_cota = :id_cota"), {"id_cota": id_cota})
+    await session.execute(text("DELETE FROM pesq_amostras_cotas WHERE id_cota = :id_cota"), {"id_cota": id_cota})
     await session.commit()
 
 
@@ -451,7 +465,7 @@ async def update_amostra(
     res = await session.execute(
         text(
             """
-            UPDATE amostras
+            UPDATE pesq_amostras
             SET id_municipio = :id_municipio,
                 descricao = :descricao,
                 nivel_confianca = :nivel_confianca,
@@ -493,7 +507,7 @@ async def delete_amostra(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     linked = await session.execute(
-        text("SELECT COUNT(*) FROM pesquisas WHERE id_amostra = :id_amostra"),
+        text("SELECT COUNT(*) FROM pesq_pesquisas WHERE id_amostra = :id_amostra"),
         {"id_amostra": id_amostra},
     )
     if (linked.scalar_one() or 0) > 0:
@@ -504,20 +518,20 @@ async def delete_amostra(
     await session.execute(
         text(
             """
-            DELETE FROM amostras_cotas
+            DELETE FROM pesq_amostras_cotas
             WHERE id_amostra_dimensao IN (
-                SELECT id_amostra_dimensao FROM amostras_dimensao WHERE id_amostra = :id_amostra
+                SELECT id_amostra_dimensao FROM pesq_amostras_dimensao WHERE id_amostra = :id_amostra
             )
             """
         ),
         {"id_amostra": id_amostra},
     )
     await session.execute(
-        text("DELETE FROM amostras_dimensao WHERE id_amostra = :id_amostra"),
+        text("DELETE FROM pesq_amostras_dimensao WHERE id_amostra = :id_amostra"),
         {"id_amostra": id_amostra},
     )
     await session.execute(
-        text("DELETE FROM amostras WHERE id_amostra = :id_amostra"),
+        text("DELETE FROM pesq_amostras WHERE id_amostra = :id_amostra"),
         {"id_amostra": id_amostra},
     )
     await session.commit()
@@ -543,7 +557,7 @@ async def _prepare_eleitorado_params(
     fonte = (payload.fonte_endpoint or "").strip() or None
 
     if tipo == "manual" and id_usuario is None:
-        u_res = await session.execute(text("SELECT id_usuario FROM usuarios ORDER BY id_usuario ASC LIMIT 1"))
+        u_res = await session.execute(text("SELECT id_usuario FROM sys_usuarios ORDER BY id_usuario ASC LIMIT 1"))
         id_usuario = u_res.scalar_one_or_none()
         if id_usuario is None:
             raise HTTPException(
@@ -580,12 +594,14 @@ async def _prepare_eleitorado_params(
 async def create_eleitorado_tse(
     payload: EleitoradoTseSchema,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     params = await _prepare_eleitorado_params(payload, session)
+    params["tid"] = tenant.tenant_id
     res = await session.execute(
         text(
             """
-            INSERT INTO eleitorado_tse (
+            INSERT INTO geo_eleitorado_tse (
                 id_municipio, id_bairro, ano_referencia, mes_referencia,
                 zona_eleitoral, secao_eleitoral, quantidade_eleitores,
                 eleitores_biometria, populacao_ibge, ano_censo_ibge,
@@ -596,7 +612,7 @@ async def create_eleitorado_tse(
                 :zona_eleitoral, :secao_eleitoral, :quantidade_eleitores,
                 :eleitores_biometria, :populacao_ibge, :ano_censo_ibge,
                 :tipo_captura, :fonte_endpoint, :id_usuario_captura,
-                NOW(), :hash_origem, 1
+                NOW(), :hash_origem, :tid
             )
             RETURNING id_eleitorado_tse, id_municipio, ano_referencia, mes_referencia,
                       quantidade_eleitores, tipo_captura, data_captura
@@ -619,7 +635,7 @@ async def update_eleitorado_tse(
     res = await session.execute(
         text(
             """
-            UPDATE eleitorado_tse
+            UPDATE geo_eleitorado_tse
             SET id_municipio = :id_municipio,
                 id_bairro = :id_bairro,
                 ano_referencia = :ano_referencia,
@@ -654,7 +670,7 @@ async def delete_eleitorado_tse(
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     linked = await session.execute(
-        text("SELECT COUNT(*) FROM amostras WHERE id_eleitorado_tse = :id"),
+        text("SELECT COUNT(*) FROM pesq_amostras WHERE id_eleitorado_tse = :id"),
         {"id": id_eleitorado_tse},
     )
     if (linked.scalar_one() or 0) > 0:
@@ -663,7 +679,7 @@ async def delete_eleitorado_tse(
             detail="Não é possível excluir este registro pois ele está vinculado a uma amostra.",
         )
     await session.execute(
-        text("DELETE FROM eleitorado_tse WHERE id_eleitorado_tse = :id"),
+        text("DELETE FROM geo_eleitorado_tse WHERE id_eleitorado_tse = :id"),
         {"id": id_eleitorado_tse},
     )
     await session.commit()
