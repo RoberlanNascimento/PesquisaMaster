@@ -128,13 +128,42 @@ export function SurveysManagementFeature(): React.JSX.Element {
     if (!editingSurvey && dbConnected) {
       try {
         const aux = await fetchPesquisasAuxOptions();
-        const idMunicipio = aux.municipios[0]?.id_municipio ?? 1;
+        const parsedMunId = Number(String(formData.municipalityId ?? "").replace(/^mun-/i, ""));
+        const cityNamePart = formData.cityUf.split("/")[0]?.trim().toLowerCase() ?? "";
+        const ufPart = formData.cityUf.split("/")[1]?.trim().toLowerCase() ?? "";
+        const matchedMun =
+          (Number.isInteger(parsedMunId) && parsedMunId > 0
+            ? aux.municipios.find((m) => m.id_municipio === parsedMunId)
+            : undefined) ??
+          aux.municipios.find(
+            (m) =>
+              m.nome.trim().toLowerCase() === cityNamePart &&
+              (!ufPart || m.estado.trim().toLowerCase() === ufPart),
+          ) ??
+          aux.municipios.find((m) => cityNamePart && m.nome.trim().toLowerCase().includes(cityNamePart));
+        const idMunicipio = matchedMun?.id_municipio ?? aux.municipios[0]?.id_municipio ?? 1;
+
         const parsedAmostra = Number(formData.samplePlanId);
         const idAmostra =
           Number.isFinite(parsedAmostra) && parsedAmostra > 0
             ? parsedAmostra
             : (aux.amostras[0]?.id_amostra ?? 1);
-        const idProfissional = aux.profissionais[0]?.id_profissional ?? 1;
+
+        const parsedProfId = Number(String(formData.collaboratorId ?? "").replace(/^colab-/i, ""));
+        const statNameNorm = formData.statisticianName.trim().toLowerCase();
+        const conreNorm = formData.conreNumber.trim().toLowerCase();
+        const matchedProf =
+          (Number.isInteger(parsedProfId) && parsedProfId > 0
+            ? aux.profissionais.find((p) => p.id_profissional === parsedProfId)
+            : undefined) ??
+          aux.profissionais.find(
+            (p) =>
+              (statNameNorm && p.nome.trim().toLowerCase() === statNameNorm) ||
+              (conreNorm && (p.registro_profissional ?? "").trim().toLowerCase() === conreNorm),
+          ) ??
+          aux.profissionais.find((p) => statNameNorm && p.nome.trim().toLowerCase().includes(statNameNorm));
+        const idProfissional = matchedProf?.id_profissional ?? aux.profissionais[0]?.id_profissional ?? 1;
+
         const rawUserId = useUiSessionStore.getState().currentUser?.id;
         const parsedUserId = rawUserId !== undefined ? Number(rawUserId) : Number.NaN;
         const creatorUserId =

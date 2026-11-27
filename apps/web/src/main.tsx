@@ -26,6 +26,32 @@ if (
 
 installAuthFetchInterceptor();
 
+if (typeof window !== "undefined" && typeof window.fetch === "function") {
+  const prevFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    const isApiRequest = url.includes("/api/") || url.includes(":8000");
+    if (isApiRequest) {
+      const token = window.localStorage.getItem("pm_auth_token");
+      if (token) {
+        const headers = new Headers(
+          init?.headers ?? (input instanceof Request ? input.headers : undefined),
+        );
+        if (!headers.has("Authorization")) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+        return prevFetch(input, { ...init, headers });
+      }
+    }
+    return prevFetch(input, init);
+  };
+}
+
 const rootElement = document.getElementById("root");
 if (rootElement) {
   createRoot(rootElement).render(

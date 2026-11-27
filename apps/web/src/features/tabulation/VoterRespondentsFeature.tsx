@@ -13,39 +13,41 @@ export interface PersonRecord {
   readonly region: string;
 }
 
-const INITIAL_PEOPLE: readonly PersonRecord[] = [
-  { id: 1, name: "Entrevistado Anonimizado #001", gender: "Feminino", ageGroup: "25 a 34 anos", education: "Superior Completo", income: "3 a 5 SM", religion: "Católica", district: "Centro", region: "Urbana" },
-  { id: 2, name: "Entrevistado Anonimizado #002", gender: "Masculino", ageGroup: "35 a 44 anos", education: "Médio Completo", income: "1 a 2 SM", religion: "Evangélica", district: "Cidade Nova", region: "Urbana" },
-  { id: 3, name: "Entrevistado Anonimizado #003", gender: "Feminino", ageGroup: "45 a 59 anos", education: "Fundamental", income: "Até 1 SM", religion: "Outras", district: "Bairro da Paz", region: "Periférica" },
-  { id: 4, name: "Entrevistado Anonimizado #004", gender: "Masculino", ageGroup: "16 a 24 anos", education: "Médio Incompleto", income: "1 a 2 SM", religion: "Sem Religião", district: "Nova Marabá", region: "Urbana" },
-];
+function normalizeGender(raw: unknown): "Feminino" | "Masculino" | "Não informado" {
+  const val = String(raw ?? "").trim().toLowerCase();
+  if (val === "f" || val === "feminino" || val === "mulher") return "Feminino";
+  if (val === "m" || val === "masculino" || val === "homem") return "Masculino";
+  return "Não informado";
+}
 
 export function VoterRespondentsFeature(): React.JSX.Element {
-  const [people, setPeople] = useState<readonly PersonRecord[]>(INITIAL_PEOPLE);
+  const [people, setPeople] = useState<readonly PersonRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("TODOS");
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/pessoas")
+    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/pessoas", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : []))
-      .then((items: any[]) => {
-        if (items && items.length > 0) {
+      .then((items: unknown) => {
+        if (Array.isArray(items)) {
           setPeople(
-            items.map((p) => ({
-              id: p.id_pessoa,
-              name: p.nome || `Eleitor Registrado #${p.id_pessoa}`,
-              gender: p.sexo,
-              ageGroup: p.faixa_etaria,
-              education: p.escolaridade,
-              income: p.faixa_renda,
-              religion: p.religiao || "Não declarada",
-              district: p.bairro_distrito,
-              region: p.regiao_geografica,
+            items.map((p: any) => ({
+              id: Number(p.id_pessoa ?? 0),
+              name: `Entrevistado #${p.id_pessoa ?? "?"}`,
+              gender: normalizeGender(p.sexo),
+              ageGroup: String(p.faixa_etaria || "Não informada"),
+              education: String(p.escolaridade || "Não informada"),
+              income: String(p.faixa_renda || "Não informada"),
+              religion: String(p.religiao || "Não declarada"),
+              district: String(p.bairro_distrito || "Não informado"),
+              region: String(p.regiao_geografica || "Não informada"),
             }))
           );
+        } else {
+          setPeople([]);
         }
       })
-      .catch(() => {});
+      .catch(() => setPeople([]));
   }, []);
 
   const filtered = useMemo(() => {
@@ -54,11 +56,20 @@ export function VoterRespondentsFeature(): React.JSX.Element {
       if (activeTab === "MASCULINO" && p.gender !== "Masculino") return false;
       if (search.trim()) {
         const q = search.toLowerCase();
-        return p.name.toLowerCase().includes(q) || p.district.toLowerCase().includes(q) || p.education.toLowerCase().includes(q);
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.district.toLowerCase().includes(q) ||
+          p.education.toLowerCase().includes(q)
+        );
       }
       return true;
     });
   }, [people, activeTab, search]);
+
+  const distinctDistricts = useMemo(
+    () => new Set(people.map((p) => p.district).filter((d) => d && d !== "Não informado")).size,
+    [people]
+  );
 
   return (
     <EnterpriseCrudWorkspace<PersonRecord>
@@ -73,8 +84,8 @@ export function VoterRespondentsFeature(): React.JSX.Element {
       onTabChange={setActiveTab}
       kpis={[
         { id: "kpi-voter-total", label: "Eleitores Cadastrados", value: people.length, helperText: "Tabela pessoas", variant: "default" },
-        { id: "kpi-voter-lgpd", label: "Anonimização LGPD", value: "Ativa", helperText: "Blindagem de dados", variant: "success" },
-        { id: "kpi-voter-districts", label: "Bairros Cobertos", value: new Set(people.map((p) => p.district)).size, helperText: "Distribuição", variant: "default" },
+        { id: "kpi-voter-lgpd", label: "Anonimização LGPD", value: "Ativa", helperText: "Identificação mascarada", variant: "success" },
+        { id: "kpi-voter-districts", label: "Bairros Cobertos", value: distinctDistricts, helperText: "Distribuição", variant: "default" },
       ]}
       searchPlaceholder="Buscar por código, bairro ou escolaridade..."
       searchValue={search}

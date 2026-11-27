@@ -1,5 +1,6 @@
 """Rotas de Autenticação JWT + Cookie HttpOnly via fn_autenticar_usuario (PostgreSQL)."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -29,9 +30,73 @@ def _create_token(payload: dict, expires_delta: timedelta) -> str:
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
+@dataclass(frozen=True)
+class CurrentUser:
+    """Usuário autenticado extraído do JWT Bearer."""
+
+    id_usuario: int
+    tenant_id: int
+    cargo: str
+    email: str
+
+
 def decode_access_token(token: str) -> dict:
     settings = get_settings()
     return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+
+
+async def get_current_user(request: Request) -> CurrentUser:
+    """Valida Authorization: Bearer <access_token> e retorna o usuário autenticado."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de autenticação não fornecido.",
+        )
+
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de autenticação vazio.",
+        )
+
+    try:
+        claims = decode_access_token(token)
+    except jwt.ExpiredSignatureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão expirada.",
+        ) from exc
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido.",
+        ) from exc
+
+    if claims.get("type") == "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token não pode ser usado para acessar recursos da API.",
+        )
+
+    raw_uid = claims.get("id_usuario") or claims.get("sub")
+    raw_tid = claims.get("tenant_id") or claims.get("id_organizacao")
+    try:
+        id_usuario = int(raw_uid)
+        tenant_id = int(raw_tid)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Claims de identificação inválidas no token.",
+        ) from exc
+
+    return CurrentUser(
+        id_usuario=id_usuario,
+        tenant_id=tenant_id,
+        cargo=str(claims.get("cargo") or ""),
+        email=str(claims.get("email") or ""),
+    )
 
 
 @auth_router.post("/login", summary="Autentica usuário via fn_autenticar_usuario e emite JWT + Cookie HttpOnly")
@@ -67,6 +132,7 @@ async def login(
 
     auth_data = dict(row._mapping)
     if not auth_data.get("autenticado"):
+        await session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_data.get("mensagem_erro") or "E-mail ou senha inválidos.",
@@ -77,6 +143,7 @@ async def login(
         {"id_u": auth_data["id_usuario"]},
     )
     if bool(rev_res.scalar()):
+        await session.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso revogado pelo administrador. Aguarde nova autorização.",
@@ -142,6 +209,12 @@ async def get_me(request: Request) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão expirada.")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido.")
+
+    if claims.get("type") == "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token não é aceito neste endpoint.",
+        )
 
     return {
         "id_usuario": claims.get("id_usuario"),

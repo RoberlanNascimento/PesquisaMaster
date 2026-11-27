@@ -14,6 +14,26 @@ interface PendingSaveNb {
   readonly editId?: string;
 }
 
+function parseIncomeBracketToCurrency(bracket: string): number {
+  const clean = bracket.trim();
+  const directNumeric = Number(clean.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", "."));
+  if (/^r?\$?\s*[\d.,]+$/i.test(clean) && Number.isFinite(directNumeric) && directNumeric > 0) {
+    return directNumeric;
+  }
+  const nums = (clean.match(/\d+(?:[.,]\d+)?/g) ?? [])
+    .map((n) => Number(n.replace(",", ".")))
+    .filter((n) => Number.isFinite(n));
+  const minWage = 1518;
+  if (nums.length >= 2 && nums[0] !== undefined && nums[1] !== undefined) {
+    return Math.round(((nums[0] + nums[1]) / 2) * minWage);
+  }
+  if (nums.length === 1 && nums[0] !== undefined) {
+    const val = nums[0];
+    return val > 100 ? val : Math.round(val * minWage);
+  }
+  return 3200.0;
+}
+
 export function NeighborhoodsCrudScreen(): React.JSX.Element {
   const countries = useTerritorialStore((s) => s.countries);
   const defaultCountryId = useTerritorialStore((s) => s.defaultCountryId);
@@ -100,14 +120,25 @@ export function NeighborhoodsCrudScreen(): React.JSX.Element {
     saveNeighborhood(regionId, data, editId);
 
     try {
+      const targetRegion = regions.find((r) => r.id === regionId);
+      const targetMun = targetRegion
+        ? municipalities.find((m) => m.id === targetRegion.municipalityId)
+        : undefined;
+      const parsedMunId = Number(String(targetMun?.id ?? targetRegion?.municipalityId ?? "").replace(/^mun-/i, ""));
+      const resolvedMunicipioId = Number.isInteger(parsedMunId) && parsedMunId > 0 ? parsedMunId : 1;
+      const resolvedRegiaoId =
+        targetRegion?.id_regiao_zona ??
+        (Number(regionId.replace(/^reg-/i, "")) || 1);
+      const resolvedRenda = parseIncomeBracketToCurrency(data.predominantIncomeBracket);
+
       const bodyJson = JSON.stringify({
-        id_municipio: 1,
-        id_regiao_zona: Number(regionId.replace(/^reg-/, "")) || 1,
+        id_municipio: resolvedMunicipioId,
+        id_regiao_zona: resolvedRegiaoId,
         codigo_bairro_ibge: data.code,
         nome_bairro: data.name,
         populacao_total: data.estimatedVoters,
         eleitorado_total: data.estimatedVoters,
-        renda_media_domiciliar: 3200.0,
+        renda_media_domiciliar: resolvedRenda,
         ativo: true,
       });
 

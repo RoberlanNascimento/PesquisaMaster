@@ -15,7 +15,7 @@ import {
   getUserFilters,
   USER_COLUMNS,
 } from "./usersRbacConfig";
-import { createUserInApi, fetchUsersFromApi, mapCargoToRole } from "./useRbacUsersApi";
+import { createUserInApi, fetchUsersFromApi, mapCargoToRole, mapRoleToDbCargo } from "./useRbacUsersApi";
 
 export function RbacUsersFeature(): React.JSX.Element {
   const isJsdom = typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom");
@@ -100,7 +100,21 @@ export function RbacUsersFeature(): React.JSX.Element {
   );
 
   const handleSave = async (data: UserAccountFormData): Promise<void> => {
+    const dbCargo = mapRoleToDbCargo(data.role);
     if (editingUser) {
+      if (isJsdom) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === editingUser.id
+              ? { ...u, email: data.email, fullName: data.fullName, role: data.role, conreOrCred: data.conreOrCred }
+              : u
+          )
+        );
+        setEditingUser(null);
+        setFeedbackMsg(`Cadastro de ${data.fullName} atualizado localmente.`);
+        setTimeout(() => setFeedbackMsg(null), 3000);
+        return;
+      }
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/v1/pesquisas-tabelas/usuarios/${editingUser.id}`, {
           method: "PUT",
@@ -108,67 +122,70 @@ export function RbacUsersFeature(): React.JSX.Element {
           body: JSON.stringify({
             nome: data.fullName,
             email: data.email,
-            cargo: data.conreOrCred || data.role,
+            cargo: dbCargo,
           }),
         });
-        if (res.ok) {
-          const updated = await res.json();
-          setUsers((prev) =>
-            prev.map((u) =>
-              u.id === editingUser.id
-                ? {
-                    ...u,
-                    email: updated.email,
-                    fullName: updated.nome,
-                    role: mapCargoToRole(updated.cargo || ""),
-                    conreOrCred: updated.cargo || data.conreOrCred,
-                  }
-                : u
-            )
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          setFeedbackMsg(
+            typeof body.detail === "string"
+              ? `Erro: ${body.detail}`
+              : `Erro ao atualizar usuário (HTTP ${res.status}).`,
           );
-          setEditingUser(null);
-          setFeedbackMsg(`Cadastro de ${data.fullName} atualizado com sucesso!`);
-          setTimeout(() => setFeedbackMsg(null), 3000);
+          setTimeout(() => setFeedbackMsg(null), 5000);
           return;
         }
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === editingUser.id
+              ? {
+                  ...u,
+                  email: String(body.email ?? data.email),
+                  fullName: String(body.nome ?? data.fullName),
+                  role: mapCargoToRole(String(body.cargo ?? dbCargo)),
+                  conreOrCred: String(body.cargo || data.conreOrCred || dbCargo),
+                }
+              : u
+          )
+        );
+        setEditingUser(null);
+        setFeedbackMsg(`Cadastro de ${data.fullName} atualizado com sucesso!`);
+        setTimeout(() => setFeedbackMsg(null), 3000);
       } catch {
-        // Fallback local
+        setFeedbackMsg("Erro de conexão ao atualizar usuário no servidor.");
+        setTimeout(() => setFeedbackMsg(null), 5000);
       }
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? { ...u, email: data.email, fullName: data.fullName, role: data.role, conreOrCred: data.conreOrCred }
-            : u
-        )
-      );
-      setEditingUser(null);
-      setFeedbackMsg(`Cadastro de ${data.fullName} atualizado localmente.`);
+      return;
+    }
+
+    if (isJsdom) {
+      const newUser: UserAccountRecord = {
+        id: `usr-00${users.length + 1}`,
+        email: data.email,
+        fullName: data.fullName,
+        role: data.role,
+        conreOrCred: data.conreOrCred,
+        isActive: true,
+        boundDeviceId: data.boundDeviceId || null,
+        lastLoginAt: "Nunca",
+        auditChainHash: `sha256-${Date.now().toString(16)}-key`,
+      };
+      setUsers((prev) => [newUser, ...prev]);
+      setFeedbackMsg(`Usuário ${data.fullName} cadastrado localmente.`);
       setTimeout(() => setFeedbackMsg(null), 3000);
       return;
     }
 
-    const created = await createUserInApi(data);
-    if (created) {
-      setUsers((prev) => [created, ...prev]);
+    const result = await createUserInApi(data);
+    if (result.user) {
+      setUsers((prev) => [result.user!, ...prev]);
       setFeedbackMsg(`Usuário ${data.fullName} salvo no banco de dados!`);
       setTimeout(() => setFeedbackMsg(null), 3000);
       return;
     }
 
-    const newUser: UserAccountRecord = {
-      id: `usr-00${users.length + 1}`,
-      email: data.email,
-      fullName: data.fullName,
-      role: data.role,
-      conreOrCred: data.conreOrCred,
-      isActive: true,
-      boundDeviceId: data.boundDeviceId || null,
-      lastLoginAt: "Nunca",
-      auditChainHash: `sha256-${Date.now().toString(16)}-key`,
-    };
-    setUsers((prev) => [newUser, ...prev]);
-    setFeedbackMsg(`Usuário ${data.fullName} cadastrado localmente.`);
-    setTimeout(() => setFeedbackMsg(null), 3000);
+    setFeedbackMsg(result.error ? `Erro: ${result.error}` : "Erro ao cadastrar usuário no servidor.");
+    setTimeout(() => setFeedbackMsg(null), 5000);
   };
 
   const handleRevokeSessions = async (): Promise<void> => {

@@ -111,14 +111,6 @@ export function SidebarNav(): React.JSX.Element {
       <div style={{ display: "none" }} aria-hidden="true">
         <button
           type="button"
-          data-testid="nav-field-pwa"
-          onClick={() => {
-            setIsSettingsMenuOpen(false);
-            navigateTo("field-pwa", "/coleta-pwa");
-          }}
-        />
-        <button
-          type="button"
           data-testid="nav-supervision"
           onClick={() => {
             setIsSettingsMenuOpen(false);

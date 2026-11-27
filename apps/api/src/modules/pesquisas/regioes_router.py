@@ -8,9 +8,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
-regioes_router = APIRouter(prefix="/regioes", tags=["Regiões Municipais (PostgreSQL)"])
+regioes_router = APIRouter(
+    prefix="/regioes",
+    tags=["Regiões Municipais (PostgreSQL)"],
+    dependencies=[Depends(get_current_user)],
+)
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
 
 class RegiaoCreate(BaseModel):
@@ -34,6 +44,7 @@ class RegiaoUpdate(BaseModel):
 @regioes_router.get("", summary="Lista regiões municipais do banco de dados")
 async def list_regioes(
     session: DbSessionDep,
+    tenant: TenantDep,
     id_municipio: Annotated[int | None, Query(description="Filtro por município")] = None,
     q: Annotated[str | None, Query(description="Busca por nome ou sigla")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
@@ -43,9 +54,9 @@ async def list_regioes(
         "FROM geo_regiao_zonas r "
         "LEFT JOIN geo_municipios m ON r.id_municipio = m.id_municipio "
         "LEFT JOIN geo_estados e ON m.id_estado = e.id_estado "
-        "WHERE 1=1"
+        "WHERE r.id_organizacao = :tid"
     )
-    params: dict[str, Any] = {"lim": limit}
+    params: dict[str, Any] = {"tid": tenant.tenant_id, "lim": limit}
     if id_municipio:
         sql += " AND r.id_municipio = :id_mun"
         params["id_mun"] = id_municipio
@@ -59,15 +70,17 @@ async def list_regioes(
 
 
 @regioes_router.get("/{id_regiao_zona}", summary="Obtém detalhes de uma região municipal")
-async def get_regiao(id_regiao_zona: int, session: DbSessionDep) -> dict[str, Any]:
+async def get_regiao(
+    id_regiao_zona: int, session: DbSessionDep, tenant: TenantDep
+) -> dict[str, Any]:
     sql = (
         "SELECT r.*, m.nome AS municipio_nome, m.id_estado, e.sigla AS uf "
         "FROM geo_regiao_zonas r "
         "LEFT JOIN geo_municipios m ON r.id_municipio = m.id_municipio "
         "LEFT JOIN geo_estados e ON m.id_estado = e.id_estado "
-        "WHERE r.id_regiao_zona = :id"
+        "WHERE r.id_regiao_zona = :id AND r.id_organizacao = :tid"
     )
-    res = await session.execute(text(sql), {"id": id_regiao_zona})
+    res = await session.execute(text(sql), {"id": id_regiao_zona, "tid": tenant.tenant_id})
     row = res.fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Região não encontrada.")
@@ -75,7 +88,9 @@ async def get_regiao(id_regiao_zona: int, session: DbSessionDep) -> dict[str, An
 
 
 @regioes_router.post("", status_code=status.HTTP_201_CREATED, summary="Cadastra região municipal")
-async def create_regiao(payload: RegiaoCreate, session: DbSessionDep) -> dict[str, Any]:
+async def create_regiao(
+    payload: RegiaoCreate, session: DbSessionDep, tenant: TenantDep
+) -> dict[str, Any]:
     query = text(
         "INSERT INTO geo_regiao_zonas (id_municipio, nome_regiao, sigla, descricao, ativo, "
         "id_organizacao) VALUES (:id_mun, :nome, :sigla, :desc, :ativo, :id_org) RETURNING *"
@@ -88,7 +103,7 @@ async def create_regiao(payload: RegiaoCreate, session: DbSessionDep) -> dict[st
             "sigla": payload.sigla.strip().upper() if payload.sigla else None,
             "desc": payload.descricao.strip() if payload.descricao else None,
             "ativo": payload.ativo,
-            "id_org": payload.id_organizacao,
+            "id_org": tenant.tenant_id,
         },
     )
     await session.commit()
@@ -100,10 +115,11 @@ async def create_regiao(payload: RegiaoCreate, session: DbSessionDep) -> dict[st
 
 @regioes_router.put("/{id_regiao_zona}", summary="Atualiza região municipal")
 async def update_regiao(
-    id_regiao_zona: int, payload: RegiaoUpdate, session: DbSessionDep
+    id_regiao_zona: int, payload: RegiaoUpdate, session: DbSessionDep, tenant: TenantDep
 ) -> dict[str, Any]:
     current_res = await session.execute(
-        text("SELECT * FROM geo_regiao_zonas WHERE id_regiao_zona = :id"), {"id": id_regiao_zona}
+        text("SELECT * FROM geo_regiao_zonas WHERE id_regiao_zona = :id AND id_organizacao = :tid"),
+        {"id": id_regiao_zona, "tid": tenant.tenant_id},
     )
     current = current_res.fetchone()
     if not current:
@@ -123,12 +139,13 @@ async def update_regiao(
     query = text(
         "UPDATE geo_regiao_zonas SET id_municipio = :id_mun, nome_regiao = :nome, "
         "sigla = :sigla, descricao = :desc, ativo = :ativo "
-        "WHERE id_regiao_zona = :id RETURNING *"
+        "WHERE id_regiao_zona = :id AND id_organizacao = :tid RETURNING *"
     )
     res = await session.execute(
         query,
         {
             "id": id_regiao_zona,
+            "tid": tenant.tenant_id,
             "id_mun": clean_mun,
             "nome": clean_nome,
             "sigla": clean_sigla,
@@ -146,10 +163,12 @@ async def update_regiao(
 
 
 @regioes_router.delete("/{id_regiao_zona}", summary="Remove região municipal")
-async def delete_regiao(id_regiao_zona: int, session: DbSessionDep) -> dict[str, Any]:
+async def delete_regiao(
+    id_regiao_zona: int, session: DbSessionDep, tenant: TenantDep
+) -> dict[str, Any]:
     res = await session.execute(
-        text("DELETE FROM geo_regiao_zonas WHERE id_regiao_zona = :id RETURNING id_regiao_zona"),
-        {"id": id_regiao_zona},
+        text("DELETE FROM geo_regiao_zonas WHERE id_regiao_zona = :id AND id_organizacao = :tid RETURNING id_regiao_zona"),
+        {"id": id_regiao_zona, "tid": tenant.tenant_id},
     )
     deleted = res.fetchone()
     if not deleted:

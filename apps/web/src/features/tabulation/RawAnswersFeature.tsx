@@ -11,36 +11,35 @@ export interface AnswerRecord {
   readonly latencyMs: number;
 }
 
-const INITIAL_ANSWERS: readonly AnswerRecord[] = [
-  { id: 1, sessionId: 101, candidateName: "Tarcísio de Freitas", optionLabel: "Voto Estimulado", textValue: "Opção 1", recordType: "ESTIMULADA", latencyMs: 2450 },
-  { id: 2, sessionId: 101, candidateName: "Guilherme Boulos", optionLabel: "Rejeição", textValue: "Não votaria de jeito nenhum", recordType: "REJEICAO", latencyMs: 1820 },
-  { id: 3, sessionId: 102, candidateName: "Não Sabe / Indeciso", optionLabel: "Espontânea", textValue: "NS/NR", recordType: "ESPONTANEA", latencyMs: 3100 },
-];
-
 export function RawAnswersFeature(): React.JSX.Element {
-  const [answers, setAnswers] = useState<readonly AnswerRecord[]>(INITIAL_ANSWERS);
+  const [answers, setAnswers] = useState<readonly AnswerRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("TODAS");
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/respostas")
+    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/respostas", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : []))
-      .then((items: any[]) => {
-        if (items && items.length > 0) {
+      .then((items: unknown) => {
+        if (Array.isArray(items)) {
           setAnswers(
-            items.map((r) => ({
-              id: r.id_resposta,
-              sessionId: r.id_questionario_pessoa,
-              candidateName: r.nome_urna_comercial || "Resposta Direta",
-              optionLabel: r.opcao_rotulo || r.tipo_registro,
-              textValue: r.valor_texto || "—",
-              recordType: r.tipo_registro,
-              latencyMs: r.tempo_resposta_ms || 2100,
+            items.map((r: any) => ({
+              id: Number(r.id_resposta ?? 0),
+              sessionId: Number(r.id_questionario_pessoa ?? 0),
+              candidateName: String(
+                r.nome_urna_comercial ||
+                  (r.codigo_especial ? String(r.codigo_especial).replace(/_/g, " ") : "Resposta Direta")
+              ),
+              optionLabel: String(r.opcao_rotulo || r.valor_texto || r.tipo_registro || "—"),
+              textValue: String(r.valor_texto || "—"),
+              recordType: String(r.tipo_registro || "").trim().toLowerCase(),
+              latencyMs: Number(r.tempo_resposta_ms ?? 0),
             }))
           );
+        } else {
+          setAnswers([]);
         }
       })
-      .catch(() => {});
+      .catch(() => setAnswers([]));
   }, []);
 
   const filtered = useMemo(() => {
@@ -48,11 +47,27 @@ export function RawAnswersFeature(): React.JSX.Element {
       if (activeTab !== "TODAS" && a.recordType !== activeTab) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
-        return a.candidateName.toLowerCase().includes(q) || a.optionLabel.toLowerCase().includes(q) || a.textValue.toLowerCase().includes(q);
+        return (
+          a.candidateName.toLowerCase().includes(q) ||
+          a.optionLabel.toLowerCase().includes(q) ||
+          a.textValue.toLowerCase().includes(q)
+        );
       }
       return true;
     });
   }, [answers, activeTab, search]);
+
+  const avgLatencyLabel = useMemo(() => {
+    const withLatency = answers.filter((a) => a.latencyMs > 0);
+    if (withLatency.length === 0) return "—";
+    const avgMs = withLatency.reduce((acc, a) => acc + a.latencyMs, 0) / withLatency.length;
+    return `${(avgMs / 1000).toFixed(2)} s`;
+  }, [answers]);
+
+  const uniqueSessionsCount = useMemo(
+    () => new Set(answers.map((a) => a.sessionId)).size,
+    [answers]
+  );
 
   return (
     <EnterpriseCrudWorkspace<AnswerRecord>
@@ -60,16 +75,18 @@ export function RawAnswersFeature(): React.JSX.Element {
       subtitle="Tabela transacional contendo cada voto individual, latência de decisão e candidato assinalado"
       tabs={[
         { id: "TODAS", label: "Todas as Respostas", count: answers.length },
-        { id: "ESTIMULADA", label: "Estimulada (Disco)", count: answers.filter((a) => a.recordType === "ESTIMULADA").length },
-        { id: "ESPONTANEA", label: "Espontânea", count: answers.filter((a) => a.recordType === "ESPONTANEA").length },
-        { id: "REJEICAO", label: "Rejeição", count: answers.filter((a) => a.recordType === "REJEICAO").length },
+        { id: "voto_direto", label: "Voto Direto", count: answers.filter((a) => a.recordType === "voto_direto").length },
+        { id: "rejeicao", label: "Rejeição", count: answers.filter((a) => a.recordType === "rejeicao").length },
+        { id: "likert", label: "Escala Likert", count: answers.filter((a) => a.recordType === "likert").length },
+        { id: "aprovacao", label: "Aprovação", count: answers.filter((a) => a.recordType === "aprovacao").length },
+        { id: "texto", label: "Texto Livre", count: answers.filter((a) => a.recordType === "texto").length },
       ]}
       activeTab={activeTab}
       onTabChange={setActiveTab}
       kpis={[
         { id: "kpi-ans-total", label: "Respostas Gravadas", value: answers.length, helperText: "Tabela respostas", variant: "default" },
-        { id: "kpi-ans-latency", label: "Latência Média de Decisão", value: "2.1 segundos", helperText: "Anti-fraude", variant: "success" },
-        { id: "kpi-ans-valid", label: "Taxa de Resposta Válida", value: "98.7%", helperText: "Auditada", variant: "success" },
+        { id: "kpi-ans-latency", label: "Latência Média de Decisão", value: avgLatencyLabel, helperText: "Média registrada no BD", variant: "success" },
+        { id: "kpi-ans-sessions", label: "Sessões com Respostas", value: uniqueSessionsCount, helperText: "questionarios_pessoas", variant: "default" },
       ]}
       searchPlaceholder="Buscar por candidato, opção ou texto..."
       searchValue={search}
@@ -79,8 +96,8 @@ export function RawAnswersFeature(): React.JSX.Element {
         { header: "Sessão / Eleitor", key: "sessionId", render: (a) => <span>Sessão #{a.sessionId}</span> },
         { header: "Candidato / Item", key: "candidateName", render: (a) => <span style={{ fontWeight: 600, color: "#f8fafc" }}>{a.candidateName}</span> },
         { header: "Alternativa Selecionada", key: "optionLabel", render: (a) => <span style={{ color: "#38bdf8" }}>{a.optionLabel}</span> },
-        { header: "Tipo de Registro", key: "recordType", render: (a) => <span style={{ padding: "2px 8px", borderRadius: "6px", backgroundColor: "#1e293b", fontSize: "11px" }}>{a.recordType}</span> },
-        { header: "Latência (ms)", key: "latencyMs", render: (a) => <span style={{ fontWeight: 700, color: "#facc15" }}>{a.latencyMs} ms</span> },
+        { header: "Tipo de Registro", key: "recordType", render: (a) => <span style={{ padding: "2px 8px", borderRadius: "6px", backgroundColor: "#1e293b", fontSize: "11px" }}>{a.recordType || "—"}</span> },
+        { header: "Latência (ms)", key: "latencyMs", render: (a) => <span style={{ fontWeight: 700, color: "#facc15" }}>{a.latencyMs > 0 ? `${a.latencyMs} ms` : "—"}</span> },
       ]}
       data={filtered}
       keyExtractor={(a) => String(a.id)}

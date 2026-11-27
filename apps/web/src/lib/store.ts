@@ -146,13 +146,15 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
               id_usuario?: number;
               email: string;
               full_name: string;
-              role: string;
+              role?: string;
+              cargo?: string;
               tenant_id?: string;
               id_organizacao?: number;
               nome_organizacao?: string;
             };
           };
-          const rawRole = (data.user.role ?? "").trim().toLowerCase();
+          const rawRoleLabel = data.user.role ?? data.user.cargo ?? "visitante";
+          const rawRole = rawRoleLabel.trim().toLowerCase();
           const mappedRole =
             rawRole.includes("master") || rawRole.includes("admin")
               ? "ADMIN_SISTEMA"
@@ -172,7 +174,7 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
             email: data.user.email,
             fullName: data.user.full_name,
             role: mappedRole,
-            roleLabel: data.user.role,
+            roleLabel: rawRoleLabel,
             tenantId: String(data.user.id_organizacao ?? data.user.tenant_id ?? "1"),
             tenantName: data.user.nome_organizacao ?? "Instituto PesquisaMaster",
             token: data.access_token,
@@ -273,6 +275,13 @@ export const useUiSessionStore = create<UiSessionState>((set, get) => ({
     };
   },
   logout: () => {
+    const isTestEnv = typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom");
+    if (!isTestEnv && typeof window !== "undefined" && typeof window.fetch === "function") {
+      void fetch("http://127.0.0.1:8000/api/v1/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {});
+    }
     if (typeof window !== "undefined") {
       localStorage.removeItem("pm_auth_user");
       localStorage.removeItem("pm_auth_token");

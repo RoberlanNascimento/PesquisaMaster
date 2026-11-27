@@ -62,7 +62,7 @@ export function SidebarSettingsDropdown({
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    Configurações: true,
+    Demografia: true,
     Empresa: true,
     Catálogo: true,
     Auditoria: true,

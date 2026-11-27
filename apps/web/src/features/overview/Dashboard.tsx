@@ -63,7 +63,6 @@ export function Dashboard(): React.JSX.Element {
     const relatoriosAll = Array.isArray(dbStats.relatorios) ? dbStats.relatorios : [];
     const perguntasAll = Array.isArray(dbStats.perguntas) ? dbStats.perguntas : [];
 
-    const PASTEL_REJECTION = colors.errorPastel;
 
     const parseCrosstabRows = (items: any[]): any[] =>
       items.map((item: any, idx: number) => {
@@ -148,7 +147,7 @@ export function Dashboard(): React.JSX.Element {
           : Array.isArray(crosstab.rejeicao)
             ? parseCrosstabRows(crosstab.rejeicao)
             : [];
-      const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`, PASTEL_REJECTION);
+      const rejectionPoints = toPoints(rejRows, `P${p.id_pesquisa}-REJ`);
       const sampleCount = stimulatedPoints.reduce((acc, pt) => acc + pt.quantity, 0);
 
       const pergsPesq = perguntasAll.filter((pg: any) => pg.id_pesquisa === p.id_pesquisa);

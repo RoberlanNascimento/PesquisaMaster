@@ -17,12 +17,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 from src.services.gcs import get_gcs_service
 
 questionarios_db_router = APIRouter(
     prefix="/api/v1/questionarios-db",
     tags=["Questionários & Repositório Reutilizável (PostgreSQL)"],
+    dependencies=[Depends(get_current_user)],
+)
+
+questionarios_public_router = APIRouter(
+    prefix="/api/v1/questionarios-db",
+    tags=["Questionários & Repositório Reutilizável (Público)"],
 )
 
 
@@ -112,7 +122,27 @@ class EntrevistaCreate(BaseModel):
     id_pesquisa: int
     id_questionario: int
     id_pesquisador: int | None = None
+    sexo: str | None = None
+    faixa_etaria: str | None = None
+    escolaridade: str | None = None
+    faixa_renda: str | None = None
+    bairro_distrito: str | None = None
+    regiao_geografica: str | None = None
+    latitude_coleta: float | None = None
+    longitude_coleta: float | None = None
     respostas: list[RespostaItemCreate]
+
+
+class QuestionarioUpdate(BaseModel):
+    titulo: str | None = None
+    codigo_versao: str | None = None
+    ativo: bool | None = None
+
+
+class CenarioPesquisaUpdate(BaseModel):
+    identificador: str | None = None
+    tipo_cenario: str | None = None
+    ativo: bool | None = None
 
 
 class CenarioPesquisaCreate(BaseModel):
@@ -898,6 +928,74 @@ async def create_questionario(
     return dict(res.mappings().first() or {})
 
 
+@questionarios_db_router.put("/questionarios/{id_questionario}")
+async def update_questionario(
+    id_questionario: int,
+    payload: QuestionarioUpdate,
+    session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
+) -> dict[str, Any]:
+    existing_res = await session.execute(
+        text(
+            """
+            SELECT * FROM public.form_questionarios
+            WHERE id_questionario = :id AND id_organizacao = :tid
+            """
+        ),
+        {"id": id_questionario, "tid": tenant.tenant_id},
+    )
+    existing = existing_res.mappings().first()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Questionário #{id_questionario} não encontrado.",
+        )
+
+    fields_set = payload.model_fields_set
+    titulo = (
+        payload.titulo.strip()
+        if "titulo" in fields_set and payload.titulo is not None
+        else existing["titulo"]
+    )
+    if not titulo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O título do formulário não pode ser vazio.",
+        )
+    codigo_versao = (
+        (payload.codigo_versao.strip() or "v1.0")
+        if "codigo_versao" in fields_set and payload.codigo_versao is not None
+        else existing["codigo_versao"]
+    )
+    ativo = (
+        payload.ativo
+        if "ativo" in fields_set and payload.ativo is not None
+        else existing["ativo"]
+    )
+
+    res = await session.execute(
+        text(
+            """
+            UPDATE public.form_questionarios
+            SET titulo = :titulo,
+                codigo_versao = :codigo_versao,
+                ativo = :ativo
+            WHERE id_questionario = :id AND id_organizacao = :tid
+            RETURNING *
+            """
+        ),
+        {
+            "id": id_questionario,
+            "tid": tenant.tenant_id,
+            "titulo": titulo,
+            "codigo_versao": codigo_versao,
+            "ativo": ativo,
+        },
+    )
+    await session.commit()
+    return dict(res.mappings().first() or {})
+
+
 @questionarios_db_router.delete("/questionarios/{id_questionario}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_questionario(
     id_questionario: int,
@@ -1117,6 +1215,7 @@ async def update_questionario_pergunta(
 async def create_entrevista(
     payload: EntrevistaCreate,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     if not payload.respostas:
         raise HTTPException(
@@ -1127,12 +1226,13 @@ async def create_entrevista(
     pesq_res = await session.execute(
         text(
             """
-            SELECT id_pesquisa, is_bloqueada, COALESCE(id_organizacao, 1) AS id_organizacao
+            SELECT id_pesquisa, id_amostra, is_bloqueada, COALESCE(id_organizacao, :tid) AS id_organizacao
             FROM public.pesq_pesquisas
             WHERE id_pesquisa = :id_pesquisa
+              AND id_organizacao = :tid
             """
         ),
-        {"id_pesquisa": payload.id_pesquisa},
+        {"id_pesquisa": payload.id_pesquisa, "tid": tenant.tenant_id},
     )
     pesq = pesq_res.mappings().first()
     if not pesq:
@@ -1153,9 +1253,14 @@ async def create_entrevista(
             FROM public.form_questionarios
             WHERE id_questionario = :id_questionario
               AND id_pesquisa = :id_pesquisa
+              AND id_organizacao = :tid
             """
         ),
-        {"id_questionario": payload.id_questionario, "id_pesquisa": payload.id_pesquisa},
+        {
+            "id_questionario": payload.id_questionario,
+            "id_pesquisa": payload.id_pesquisa,
+            "tid": tenant.tenant_id,
+        },
     )
     if q_res.scalar_one_or_none() is None:
         raise HTTPException(
@@ -1163,7 +1268,7 @@ async def create_entrevista(
             detail=f"Questionário #{payload.id_questionario} não encontrado para a pesquisa #{payload.id_pesquisa}.",
         )
 
-    tenant_id = int(pesq["id_organizacao"] or 1)
+    tenant_id = int(pesq["id_organizacao"] or tenant.tenant_id)
     await session.execute(
         text("SELECT set_config('app.current_tenant_id', :tid, true)"),
         {"tid": str(tenant_id)},
@@ -1184,6 +1289,23 @@ async def create_entrevista(
     valid_tipos = {"voto_direto", "rejeicao", "likert", "aprovacao", "texto"}
     valid_especiais = {"branco", "nulo", "nao_sabe", "nao_respondeu"}
 
+    raw_sexo = (payload.sexo or "").strip()
+    if raw_sexo.upper() in ("M", "MASCULINO"):
+        sexo_db = "M"
+        sexo_cat = "Masculino"
+    elif raw_sexo.upper() in ("F", "FEMININO"):
+        sexo_db = "F"
+        sexo_cat = "Feminino"
+    else:
+        sexo_db = "F"
+        sexo_cat = "Feminino"
+
+    faixa_etaria_db = (payload.faixa_etaria or "25-34").strip() or "25-34"
+    escolaridade_db = (payload.escolaridade or "Medio").strip() or "Medio"
+    faixa_renda_db = (payload.faixa_renda or "1 a 2 SM").strip() or "1 a 2 SM"
+    bairro_db = (payload.bairro_distrito or "Geral").strip() or "Geral"
+    regiao_db = (payload.regiao_geografica or "Geral").strip() or "Geral"
+
     try:
         pessoa_res = await session.execute(
             text(
@@ -1193,13 +1315,21 @@ async def create_entrevista(
                     bairro_distrito, regiao_geografica, id_organizacao
                 )
                 VALUES (
-                    'Entrevistado CAPI', 'F', '25-34', 'Medio', '1 a 2 SM',
-                    'Geral', 'Geral', :id_org
+                    'Entrevistado CAPI', :sexo, :faixa_etaria, :escolaridade, :faixa_renda,
+                    :bairro_distrito, :regiao_geografica, :id_org
                 )
                 RETURNING id_pessoa
                 """
             ),
-            {"id_org": tenant_id},
+            {
+                "sexo": sexo_db,
+                "faixa_etaria": faixa_etaria_db,
+                "escolaridade": escolaridade_db,
+                "faixa_renda": faixa_renda_db,
+                "bairro_distrito": bairro_db,
+                "regiao_geografica": regiao_db,
+                "id_org": tenant_id,
+            },
         )
         id_pessoa = int(pessoa_res.scalar_one())
 
@@ -1208,10 +1338,12 @@ async def create_entrevista(
                 """
                 INSERT INTO public.campo_questionarios_pessoas (
                     id_questionario, id_pesquisa, id_pessoa, id_pesquisador,
+                    latitude_coleta, longitude_coleta,
                     peso_amostral, status_auditoria, id_organizacao
                 )
                 VALUES (
                     :id_questionario, :id_pesquisa, :id_pessoa, :id_pesquisador,
+                    :latitude_coleta, :longitude_coleta,
                     1.000000, 'aprovada', :id_org
                 )
                 RETURNING id_questionario_pessoa
@@ -1222,6 +1354,8 @@ async def create_entrevista(
                 "id_pesquisa": payload.id_pesquisa,
                 "id_pessoa": id_pessoa,
                 "id_pesquisador": payload.id_pesquisador,
+                "latitude_coleta": payload.latitude_coleta,
+                "longitude_coleta": payload.longitude_coleta,
                 "id_org": tenant_id,
             },
         )
@@ -1278,6 +1412,29 @@ async def create_entrevista(
             )
             saved += 1
 
+        # Incrementa amostras_cotas.quantidade_coletada para as categorias demográficas correspondentes
+        id_amostra = pesq.get("id_amostra")
+        if id_amostra is not None:
+            categorias_alvo = [sexo_cat, sexo_db, faixa_etaria_db, escolaridade_db, faixa_renda_db]
+            await session.execute(
+                text(
+                    """
+                    UPDATE public.pesq_amostras_cotas c
+                    SET quantidade_coletada = COALESCE(c.quantidade_coletada, 0) + 1
+                    FROM public.pesq_amostras_dimensao d
+                    WHERE c.id_amostra_dimensao = d.id_amostra_dimensao
+                      AND d.id_amostra = :id_amostra
+                      AND c.id_organizacao = :id_org
+                      AND LOWER(c.categoria) = ANY(:cats)
+                    """
+                ),
+                {
+                    "id_amostra": id_amostra,
+                    "id_org": tenant_id,
+                    "cats": [cat.lower() for cat in categorias_alvo],
+                },
+            )
+
         await session.commit()
     except HTTPException:
         await session.rollback()
@@ -1327,6 +1484,74 @@ async def create_cenario_pesquisa(
             "tipo_cenario": payload.tipo_cenario.strip(),
             "ativo": payload.ativo,
             "tid": tenant.tenant_id,
+        },
+    )
+    await session.commit()
+    return dict(res.mappings().first() or {})
+
+
+@questionarios_db_router.put("/cenarios-pesquisa/{id_cenario}")
+async def update_cenario_pesquisa(
+    id_cenario: int,
+    payload: CenarioPesquisaUpdate,
+    session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
+) -> dict[str, Any]:
+    existing_res = await session.execute(
+        text(
+            """
+            SELECT * FROM public.pesq_cenarios_pesquisa
+            WHERE id_cenario = :id AND id_organizacao = :tid
+            """
+        ),
+        {"id": id_cenario, "tid": tenant.tenant_id},
+    )
+    existing = existing_res.mappings().first()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cenário #{id_cenario} não encontrado.",
+        )
+
+    fields_set = payload.model_fields_set
+    identificador = (
+        payload.identificador.strip()
+        if "identificador" in fields_set and payload.identificador is not None
+        else existing["identificador"]
+    )
+    if not identificador:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O identificador do cenário não pode ser vazio.",
+        )
+    tipo_cenario = (
+        payload.tipo_cenario.strip()
+        if "tipo_cenario" in fields_set and payload.tipo_cenario is not None
+        else existing["tipo_cenario"]
+    )
+    ativo = (
+        payload.ativo
+        if "ativo" in fields_set and payload.ativo is not None
+        else existing["ativo"]
+    )
+
+    res = await session.execute(
+        text(
+            """
+            UPDATE public.pesq_cenarios_pesquisa
+            SET identificador = :identificador,
+                tipo_cenario = :tipo_cenario,
+                ativo = :ativo
+            WHERE id_cenario = :id AND id_organizacao = :tid
+            RETURNING *
+            """
+        ),
+        {
+            "id": id_cenario,
+            "tid": tenant.tenant_id,
+            "identificador": identificador,
+            "tipo_cenario": tipo_cenario,
+            "ativo": ativo,
         },
     )
     await session.commit()
@@ -1387,7 +1612,7 @@ def _is_proxy_foto_url(url: str | None) -> bool:
     return "/api/v1/questionarios-db/candidatos/" in low and "/foto" in low
 
 
-@questionarios_db_router.get("/candidatos/{id_candidato_produto}/foto")
+@questionarios_public_router.get("/candidatos/{id_candidato_produto}/foto")
 async def get_candidato_foto(
     id_candidato_produto: int,
     session: AsyncSession = Depends(get_db_session),
@@ -1413,6 +1638,8 @@ async def get_candidato_foto(
         headers={
             "Cache-Control": "public, max-age=3600",
             "Cross-Origin-Resource-Policy": "cross-origin",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'",
         },
     )
 
@@ -1512,18 +1739,25 @@ class CandidatoFotoUploadPayload(BaseModel):
     id_candidato_produto: int | None = None
 
 
+_MAX_CANDIDATO_FOTO_BYTES = 2 * 1024 * 1024  # 2 MB
+
+
+def _validate_image_magic_bytes(data: bytes) -> str | None:
+    """Valida magic bytes reais para JPEG, PNG ou WEBP (rejeita SVG/HTML/binários arbitrários)."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 @questionarios_db_router.post("/candidatos/upload-foto", status_code=status.HTTP_200_OK)
 async def upload_candidato_foto(
     payload: CandidatoFotoUploadPayload,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    content_type = (payload.content_type or "").lower()
-    if not content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Envie apenas arquivos de imagem (JPG, PNG, WEBP, etc.).",
-        )
-
     raw_b64 = payload.data_base64.strip()
     if "," in raw_b64 and raw_b64.startswith("data:"):
         raw_b64 = raw_b64.split(",", 1)[1]
@@ -1534,6 +1768,25 @@ async def upload_candidato_foto(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Conteúdo de imagem inválido.",
         ) from exc
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Arquivo de imagem vazio.",
+        )
+    if len(file_bytes) > _MAX_CANDIDATO_FOTO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="A foto excede o tamanho máximo permitido de 2 MB.",
+        )
+
+    detected_mime = _validate_image_magic_bytes(file_bytes)
+    if detected_mime is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato de imagem não suportado. Envie apenas JPEG, PNG ou WEBP válidos (SVG/HTML não são permitidos).",
+        )
+    content_type = detected_mime
 
     gcs = get_gcs_service()
     if not gcs.is_configured:

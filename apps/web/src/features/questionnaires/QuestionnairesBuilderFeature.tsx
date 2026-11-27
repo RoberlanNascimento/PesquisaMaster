@@ -881,7 +881,7 @@ export function QuestionnairesBuilderFeature(): React.JSX.Element {
                                 <tr style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}>
                                   <td style={{ padding: "10px", fontWeight: 700, color: colors.primaryContainer }}>#{qp.ordem}</td>
                                   <td style={{ padding: "10px", fontWeight: 500 }}>{qp.enunciado || `Pergunta #${qp.id_pergunta}`}</td>
-                                  <td style={{ padding: "10px", color: colors.textMuted }}>{qp.tipo_pergunta || "—"}</td>
+                                  <td style={{ padding: "10px", color: colors.textMuted }}>{qp.tipo_questao ?? qp.tipo_pergunta ?? "—"}</td>
                                   <td style={{ padding: "10px", minWidth: "170px" }}>
                                     <select
                                       aria-label={`Cenário da pergunta ${qp.enunciado || qp.id_pergunta}`}
@@ -959,7 +959,7 @@ export function QuestionnairesBuilderFeature(): React.JSX.Element {
                                                 `/perguntas/${perguntaBase.id_pergunta}`,
                                                 {
                                                   enunciado: perguntaBase.enunciado,
-                                                  tipo_pergunta: perguntaBase.tipo_pergunta,
+                                                  tipo_pergunta: perguntaBase.tipo_questao ?? perguntaBase.tipo_pergunta ?? "estimulada",
                                                   id_grupo_opcao: e.target.value ? Number(e.target.value) : null,
                                                 },
                                                 "Grupo de opções da pergunta atualizado."
@@ -1261,7 +1261,7 @@ export function QuestionnairesBuilderFeature(): React.JSX.Element {
                   <tr key={p.id_pergunta} style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}>
                     <td style={{ padding: "10px 8px", color: colors.primaryContainer, fontWeight: 700 }}>#{p.id_pergunta}</td>
                     <td style={{ padding: "10px 8px", fontWeight: 500 }}>{p.enunciado}</td>
-                    <td style={{ padding: "10px 8px", color: colors.textMuted }}>{p.tipo_pergunta}</td>
+                    <td style={{ padding: "10px 8px", color: colors.textMuted }}>{p.tipo_questao ?? p.tipo_pergunta ?? "—"}</td>
                     <td style={{ padding: "10px 8px", color: colors.successPastel }}>{p.nome_grupo || "—"}</td>
                     <td style={{ padding: "10px 8px", textAlign: "right" }}>
                       <button
@@ -1345,9 +1345,9 @@ export function QuestionnairesBuilderFeature(): React.JSX.Element {
               <tbody>
                 {opcoesDoGrupo.map((o) => (
                   <tr key={o.id_opcao} style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}>
-                    <td style={{ padding: "8px" }}>{o.ordem ?? "—"}</td>
+                    <td style={{ padding: "8px" }}>{o.ordem_exibicao ?? o.ordem ?? "—"}</td>
                     <td style={{ padding: "8px", fontWeight: 500 }}>{o.rotulo}</td>
-                    <td style={{ padding: "8px", color: colors.textMuted }}>{o.valor_numerico ?? "—"}</td>
+                    <td style={{ padding: "8px", color: colors.textMuted }}>{o.codigo_valor ?? o.valor_numerico ?? "—"}</td>
                     <td style={{ padding: "8px", textAlign: "right" }}>
                       <button
                         type="button"

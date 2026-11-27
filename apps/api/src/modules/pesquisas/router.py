@@ -23,9 +23,17 @@ from src.modules.pesquisas.schemas import (
     PesquisaUpdate,
     ProfissionalOut,
 )
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
-router = APIRouter(prefix="/pesquisas", tags=["Banco de Dados Pesquisas (PostgreSQL)"])
+router = APIRouter(
+    prefix="/pesquisas",
+    tags=["Banco de Dados Pesquisas (PostgreSQL)"],
+    dependencies=[Depends(get_current_user)],
+)
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
 

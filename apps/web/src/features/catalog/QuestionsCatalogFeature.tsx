@@ -90,7 +90,7 @@ export function QuestionsCatalogFeature(): React.JSX.Element {
           items.map((q) => ({
             id: Number(q.id_pergunta),
             text: String(q.enunciado ?? q.texto_pergunta ?? ""),
-            type: String(q.tipo_pergunta ?? "estimulada"),
+            type: String(q.tipo_questao ?? q.tipo_pergunta ?? "estimulada"),
             groupId: q.id_grupo_opcao !== null && q.id_grupo_opcao !== undefined ? Number(q.id_grupo_opcao) : null,
             scaleGroup: String(q.nome_grupo || "Sem grupo"),
             scaleType: String(q.tipo_escala || ""),

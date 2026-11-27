@@ -8,6 +8,23 @@ import {
   type ResearcherRecord,
 } from "./researchersData";
 
+export type ProfessionalRoleType =
+  | "pesquisador_campo"
+  | "estatistico_responsavel"
+  | "supervisor_campo";
+
+export interface ExtendedResearcherFormData extends ResearcherFormData {
+  readonly tipoProfissional: ProfessionalRoleType;
+  readonly registroProfissional: string;
+  readonly telefone: string;
+}
+
+export interface ExtendedResearcherRecord extends ResearcherRecord {
+  readonly tipoProfissional?: ProfessionalRoleType | string;
+  readonly registroProfissional?: string | null;
+  readonly telefone?: string | null;
+}
+
 const { colors } = NOCTURNE_TOKENS;
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -29,6 +46,11 @@ const LABEL_STYLE: React.CSSProperties = {
   display: "block",
 };
 
+function normalizeRoleType(raw?: string | null): ProfessionalRoleType {
+  if (raw === "estatistico_responsavel" || raw === "supervisor_campo") return raw;
+  return "pesquisador_campo";
+}
+
 export function ResearcherDrawerForm({
   isOpen,
   onClose,
@@ -37,29 +59,38 @@ export function ResearcherDrawerForm({
 }: {
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onSave: (data: ResearcherFormData) => void;
-  readonly editingResearcher?: ResearcherRecord | null;
+  readonly onSave: (data: ExtendedResearcherFormData) => void;
+  readonly editingResearcher?: ExtendedResearcherRecord | null;
 }): React.JSX.Element {
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
-  } = useForm<ResearcherFormData>({
+  } = useForm<ExtendedResearcherFormData>({
     defaultValues: {
       fullName: "",
       cpf: "",
+      tipoProfissional: "pesquisador_campo",
+      registroProfissional: "",
+      telefone: "",
       coordinatorName: "Carlos Eduardo Mendes",
       assignedSector: "São Paulo — Zona Sul (Setor 014)",
       targetCount: 150,
     },
   });
 
+  const selectedRole = watch("tipoProfissional");
+
   useEffect(() => {
     if (editingResearcher) {
       reset({
         fullName: editingResearcher.fullName,
         cpf: editingResearcher.maskedCpf,
+        tipoProfissional: normalizeRoleType(editingResearcher.tipoProfissional),
+        registroProfissional: editingResearcher.registroProfissional ?? "",
+        telefone: editingResearcher.telefone ?? "",
         coordinatorName: editingResearcher.coordinatorName,
         assignedSector: editingResearcher.assignedSector,
         targetCount: editingResearcher.targetCount,
@@ -68,6 +99,9 @@ export function ResearcherDrawerForm({
       reset({
         fullName: "",
         cpf: "",
+        tipoProfissional: "pesquisador_campo",
+        registroProfissional: "",
+        telefone: "",
         coordinatorName: "Carlos Eduardo Mendes",
         assignedSector: "São Paulo — Zona Sul (Setor 014)",
         targetCount: 150,
@@ -75,10 +109,15 @@ export function ResearcherDrawerForm({
     }
   }, [editingResearcher, isOpen, reset]);
 
-  const onSubmit = (values: ResearcherFormData): void => {
+  const onSubmit = (values: ExtendedResearcherFormData): void => {
     const parsed = researcherFormSchema.safeParse(values);
     if (!parsed.success) return;
-    onSave(parsed.data);
+    onSave({
+      ...parsed.data,
+      tipoProfissional: normalizeRoleType(values.tipoProfissional),
+      registroProfissional: (values.registroProfissional ?? "").trim(),
+      telefone: (values.telefone ?? "").trim(),
+    });
     reset();
     onClose();
   };
@@ -89,10 +128,10 @@ export function ResearcherDrawerForm({
       onClose={onClose}
       title={
         editingResearcher
-          ? "Editar Profissional de Campo"
-          : "Cadastrar Novo Pesquisador de Campo"
+          ? "Editar Profissional"
+          : "Cadastrar Profissional (Campo / Estatístico)"
       }
-      subtitle="Credenciamento oficial, setor censitário designado e controle de metas"
+      subtitle="Credenciamento oficial, função (Pesquisador, Estatístico CONRE ou Supervisor) e metas"
       footerActions={
         <div style={{ display: "flex", gap: "10px" }}>
           <button
@@ -113,6 +152,7 @@ export function ResearcherDrawerForm({
           </button>
           <button
             type="button"
+            data-testid="btn-submit-researcher"
             onClick={handleSubmit(onSubmit)}
             style={{
               padding: "8px 18px",
@@ -125,7 +165,7 @@ export function ResearcherDrawerForm({
               cursor: "pointer",
             }}
           >
-            Cadastrar Pesquisador
+            {editingResearcher ? "Salvar Alterações" : "Cadastrar Profissional"}
           </button>
         </div>
       }
@@ -135,7 +175,20 @@ export function ResearcherDrawerForm({
         style={{ display: "flex", flexDirection: "column", gap: "14px" }}
       >
         <div>
-          <label style={LABEL_STYLE}>Nome Completo do Pesquisador *</label>
+          <label style={LABEL_STYLE}>Tipo de Profissional *</label>
+          <select
+            data-testid="select-tipo-profissional"
+            {...register("tipoProfissional")}
+            style={INPUT_STYLE}
+          >
+            <option value="pesquisador_campo">Pesquisador de Campo</option>
+            <option value="estatistico_responsavel">Estatístico Responsável (CONRE)</option>
+            <option value="supervisor_campo">Supervisor de Campo</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={LABEL_STYLE}>Nome Completo *</label>
           <input
             {...register("fullName", { required: true })}
             placeholder="Ex: Mariana Silveira Rocha"
@@ -147,7 +200,7 @@ export function ResearcherDrawerForm({
         </div>
 
         <div>
-          <label style={LABEL_STYLE}>CPF (Somente Números) *</label>
+          <label style={LABEL_STYLE}>CPF / CNPJ (Somente Números) *</label>
           <input
             {...register("cpf", { required: true })}
             placeholder="Ex: 12345678900"
@@ -159,15 +212,37 @@ export function ResearcherDrawerForm({
         </div>
 
         <div>
+          <label style={LABEL_STYLE}>
+            Registro Profissional (CONRE){selectedRole === "estatistico_responsavel" ? " *" : ""}
+          </label>
+          <input
+            data-testid="input-registro-profissional"
+            {...register("registroProfissional")}
+            placeholder="Ex: CONRE 10482-A (obrigatório para Estatístico TSE)"
+            style={INPUT_STYLE}
+          />
+        </div>
+
+        <div>
+          <label style={LABEL_STYLE}>Telefone / WhatsApp</label>
+          <input
+            data-testid="input-telefone"
+            {...register("telefone")}
+            placeholder="Ex: (91) 99999-0000"
+            style={INPUT_STYLE}
+          />
+        </div>
+
+        <div>
           <label style={LABEL_STYLE}>Coordenador de Campo Responsável *</label>
           <input {...register("coordinatorName", { required: true })} style={INPUT_STYLE} />
         </div>
 
         <div>
-          <label style={LABEL_STYLE}>Setor Censitário / Região Designada *</label>
+          <label style={LABEL_STYLE}>Especialidade / Setor Designado *</label>
           <input
             {...register("assignedSector", { required: true })}
-            placeholder="Ex: São Paulo — Zona Leste (Setor 092)"
+            placeholder="Ex: Entrevistador de Campo ou Estatística Eleitoral"
             style={INPUT_STYLE}
           />
         </div>
@@ -184,4 +259,3 @@ export function ResearcherDrawerForm({
     </SlideOverDrawer>
   );
 }
-

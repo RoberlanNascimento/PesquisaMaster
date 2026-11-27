@@ -135,6 +135,13 @@ interface PwaAnswerEntry {
 interface QueuedInterviewPayload {
   readonly id_pesquisa: number;
   readonly id_questionario: number;
+  readonly sexo?: string | null;
+  readonly faixa_etaria?: string | null;
+  readonly escolaridade?: string | null;
+  readonly faixa_renda?: string | null;
+  readonly bairro_distrito?: string | null;
+  readonly latitude_coleta?: number | null;
+  readonly longitude_coleta?: number | null;
   readonly respostas: readonly PwaAnswerEntry[];
 }
 
@@ -207,6 +214,7 @@ export function ResearcherPwaFeature(): React.JSX.Element {
   const [selectedProfile, setSelectedProfile] = useState<string>(
     "Feminino • 25 a 44 anos • Ensino Médio"
   );
+  const [selectedIncome, setSelectedIncome] = useState<string>("2 a 5 SM");
   const [gpsCoords, setGpsCoords] = useState<{ lat: string; lon: string; acc: string }>({
     lat: "-23.6214",
     lon: "-46.6382",
@@ -448,9 +456,26 @@ export function ResearcherPwaFeature(): React.JSX.Element {
     );
     const respostas = [...simples, ...baterias];
     if (respostas.length === 0) return null;
+
+    const profileParts = selectedProfile.split("•").map((part) => part.trim());
+    const rawSexo = profileParts[0] ?? "";
+    const sexo = /^f/i.test(rawSexo) ? "F" : /^m/i.test(rawSexo) ? "M" : rawSexo || null;
+    const faixa_etaria = profileParts[1] || null;
+    const escolaridade = profileParts[2] || null;
+    const bairro_distrito = selectedSector.split("—")[0]?.trim() || selectedSector.trim() || null;
+    const latNum = Number(gpsCoords.lat);
+    const lonNum = Number(gpsCoords.lon);
+
     return {
       id_pesquisa: activePesquisaId,
       id_questionario: activeQuestionario.id_questionario,
+      sexo,
+      faixa_etaria,
+      escolaridade,
+      faixa_renda: selectedIncome.trim() || null,
+      bairro_distrito,
+      latitude_coleta: Number.isFinite(latNum) ? latNum : null,
+      longitude_coleta: Number.isFinite(lonNum) ? lonNum : null,
       respostas,
     };
   };
@@ -620,6 +645,29 @@ export function ResearcherPwaFeature(): React.JSX.Element {
             <option value="Masculino • 45 a 59 anos • Fundamental">
               Masculino • 45 a 59 anos • Fundamental (14/20)
             </option>
+            <option value="Feminino • 16 a 24 anos • Superior">
+              Feminino • 16 a 24 anos • Superior
+            </option>
+            <option value="Masculino • 60+ anos • Médio">
+              Masculino • 60+ anos • Médio
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: "4px" }}>
+            Faixa de Renda Familiar
+          </label>
+          <select
+            data-testid="pwa-select-income"
+            value={selectedIncome}
+            onChange={(e) => setSelectedIncome(e.target.value)}
+            style={SELECT_STYLE}
+          >
+            <option value="Até 2 SM">Até 2 SM</option>
+            <option value="2 a 5 SM">2 a 5 SM</option>
+            <option value="5 a 10 SM">5 a 10 SM</option>
+            <option value="Acima de 10 SM">Acima de 10 SM</option>
           </select>
         </div>
 

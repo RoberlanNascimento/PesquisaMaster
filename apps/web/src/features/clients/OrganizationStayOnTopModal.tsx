@@ -38,6 +38,7 @@ export function OrganizationStayOnTopModal({
   onLogoUploaded,
 }: OrganizationStayOnTopModalProps): React.JSX.Element | null {
   const activeTenantId = useUiSessionStore((state) => state.activeTenantId);
+  const currentUserTenantId = useUiSessionStore((state) => state.currentUser?.tenantId);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [orgId, setOrgId] = useState<number>(1);
   const [razaoSocial, setRazaoSocial] = useState("");
@@ -70,23 +71,27 @@ export function OrganizationStayOnTopModal({
     })
       .then((r) => (r.ok ? r.json() : []))
       .then((items: OrganizationRecord[]) => {
-        const first = items?.[0];
-        if (first) {
-          setOrgId(first.id_organizacao);
-          setRazaoSocial(first.razao_social);
-          setNomeFantasia(first.nome_fantasia);
-          setCnpj(first.cnpj);
-          setSlug(first.slug_subdominio);
-          setPlano(first.plano_assinatura);
-          setStatusAssinatura(first.status_assinatura);
-          setLimitePesquisas(first.limite_pesquisas_ativas);
-          setLimiteEntrevistas(first.limite_entrevistas_mes);
-          setLogomarca(first.logomarca ?? "");
+        const targetTenantId = currentUserTenantId ?? activeTenantId;
+        const matched =
+          (targetTenantId && Array.isArray(items)
+            ? items.find((org) => String(org.id_organizacao) === String(targetTenantId))
+            : undefined) ?? items?.[0];
+        if (matched) {
+          setOrgId(matched.id_organizacao);
+          setRazaoSocial(matched.razao_social);
+          setNomeFantasia(matched.nome_fantasia);
+          setCnpj(matched.cnpj);
+          setSlug(matched.slug_subdominio);
+          setPlano(matched.plano_assinatura);
+          setStatusAssinatura(matched.status_assinatura);
+          setLimitePesquisas(matched.limite_pesquisas_ativas);
+          setLimiteEntrevistas(matched.limite_entrevistas_mes);
+          setLogomarca(matched.logomarca ?? "");
           setLogoImgFailed(false);
         }
       })
       .catch(() => {});
-  }, [isOpen, activeTenantId]);
+  }, [isOpen, activeTenantId, currentUserTenantId]);
 
   if (!isOpen) return null;
 

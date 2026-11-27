@@ -12,7 +12,6 @@ const PALETTE = [
   "#fdba74",
   "#cbd5e1",
 ];
-const PASTEL_REJECTION = "#fca5a5";
 
 function toPastelHex(rawHex: string | null | undefined, fallback: string): string {
   if (!rawHex || typeof rawHex !== "string") return fallback;
@@ -123,6 +122,7 @@ function isNonCandidateOption(name: string): boolean {
 export function ClientPresentationReportFeature(): React.JSX.Element {
   const [pesquisas, setPesquisas] = useState<any[]>([]);
   const [candidatosDb, setCandidatosDb] = useState<any[]>([]);
+  const [perguntasCatalogo, setPerguntasCatalogo] = useState<any[]>([]);
   const [surveyData, setSurveyData] = useState<{
     perguntas: any[];
     respostas_por_pergunta: any[];
@@ -159,6 +159,9 @@ export function ClientPresentationReportFeature(): React.JSX.Element {
     ]).then(([stats, cands]) => {
       const pesqs = Array.isArray(stats?.pesquisas) ? stats.pesquisas : [];
       setPesquisas(pesqs);
+      if (Array.isArray(stats?.perguntas)) {
+        setPerguntasCatalogo(stats.perguntas);
+      }
       if (pesqs.length > 0) {
         setSelectedSurveyId(String(pesqs[0].id_pesquisa));
       }
@@ -354,9 +357,9 @@ export function ClientPresentationReportFeature(): React.JSX.Element {
                   : String(pg.tipo_questao || "Pergunta do Questionário");
 
         if (directResps.length > 0) {
-          rows = mapDbResponseRows(directResps, isRej ? PASTEL_REJECTION : undefined);
+          rows = mapDbResponseRows(directResps);
         } else if (!hasDirectRespostasInSurvey && isRej && crosstabRej.length > 0) {
-          rows = mapCrosstabRows(crosstabRej, PASTEL_REJECTION);
+          rows = mapCrosstabRows(crosstabRej);
           sourceLabel = "Tabela relatorios_tabulacao (PostgreSQL)";
         } else if (!hasDirectRespostasInSurvey && isVote && !isRej && crosstabVotes.length > 0) {
           rows = mapCrosstabRows(crosstabVotes);
@@ -381,17 +384,31 @@ export function ClientPresentationReportFeature(): React.JSX.Element {
         });
       }
     } else {
-      // Sem perguntas vinculadas a esta pesquisa: exibe apenas os dados reais de relatorios_tabulacao desta pesquisa
+      // Sem perguntas vinculadas diretamente: usa o texto real das perguntas do banco (mesma lógica do Dashboard)
+      const pergsPesq = perguntasCatalogo.filter(
+        (pg: any) => String(pg.id_pesquisa) === String(selectedSurvey.id_pesquisa)
+      );
+      const pergsPool = pergsPesq.length > 0 ? pergsPesq : perguntasCatalogo;
+      const findQuestion = (regex: RegExp): string | undefined =>
+        pergsPool.find((pg: any) => regex.test(String(pg.enunciado ?? "")))?.enunciado;
+
+      const stimulatedTitle =
+        findQuestion(/disco|em qual destes candidatos/i) ??
+        findQuestion(/candidatos fossem estes/i) ??
+        findQuestion(/em quem voc[êe] votaria/i);
+      const rejectionTitle = findQuestion(/n[ãa]o votaria/i);
+
       if (crosstabVotes.length > 0) {
         const rows = mapCrosstabRows(crosstabVotes);
         blocks.push({
           id: `rel-vote-${relPesq?.id_relatorio ?? 0}`,
           ordem: 1,
           idCenario: null,
-          cenarioNome: relPesq?.titulo_relatorio || "Relatório Consolidado",
+          cenarioNome: "Pesquisa Estimulada",
           cenarioTipo: "estimulado",
-          questionText: relPesq?.titulo_relatorio || "Intenção de Voto (relatorios_tabulacao)",
-          categoryLabel: "Relatório Consolidado",
+          questionText:
+            stimulatedTitle || relPesq?.titulo_relatorio || "Intenção de Voto (relatorios_tabulacao)",
+          categoryLabel: "Pesquisa Estimulada",
           sourceLabel: "Tabela relatorios_tabulacao (PostgreSQL)",
           isRejection: false,
           totalVotos: rows.reduce((a, b) => a + b.votos, 0),
@@ -399,14 +416,14 @@ export function ClientPresentationReportFeature(): React.JSX.Element {
         });
       }
       if (crosstabRej.length > 0) {
-        const rows = mapCrosstabRows(crosstabRej, PASTEL_REJECTION);
+        const rows = mapCrosstabRows(crosstabRej);
         blocks.push({
           id: `rel-rej-${relPesq?.id_relatorio ?? 0}`,
           ordem: blocks.length + 1,
           idCenario: null,
           cenarioNome: "Rejeição Eleitoral",
           cenarioTipo: "rejeicao",
-          questionText: "Rejeição Eleitoral (relatorios_tabulacao)",
+          questionText: rejectionTitle || "Rejeição Eleitoral (relatorios_tabulacao)",
           categoryLabel: "Índice de Rejeição",
           sourceLabel: "Tabela relatorios_tabulacao (PostgreSQL)",
           isRejection: true,
@@ -417,7 +434,7 @@ export function ClientPresentationReportFeature(): React.JSX.Element {
     }
 
     return blocks;
-  }, [selectedSurvey, surveyData, photoLookup]);
+  }, [selectedSurvey, surveyData, photoLookup, perguntasCatalogo]);
 
   const scenarioGroups: readonly ScenarioQuestionGroup[] = useMemo(() => {
     const map = new Map<

@@ -8,9 +8,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
-tables_router = APIRouter(prefix="/pesquisas-tabelas", tags=["Tabelas do Banco Pesquisas"])
+tables_router = APIRouter(
+    prefix="/pesquisas-tabelas",
+    tags=["Tabelas do Banco Pesquisas"],
+    dependencies=[Depends(get_current_user)],
+)
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
@@ -521,7 +529,7 @@ async def list_opcoes_resposta(session: DbSessionDep, tenant: TenantDep, limit: 
 @tables_router.get("/itens-bateria", summary="Lista subitens de bateria (perguntas_itens_bateria)")
 async def list_itens_bateria(session: DbSessionDep, tenant: TenantDep, limit: int = 50) -> list[dict[str, Any]]:
     query = text(
-        "SELECT ib.*, p.texto_pergunta FROM form_perguntas_itens_bateria ib "
+        "SELECT ib.*, p.enunciado FROM form_perguntas_itens_bateria ib "
         "LEFT JOIN form_perguntas p ON ib.id_pergunta = p.id_pergunta "
         "WHERE ib.id_organizacao = :tid "
         "ORDER BY ib.id_pergunta ASC, ib.ordem ASC LIMIT :lim"

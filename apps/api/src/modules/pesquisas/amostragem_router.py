@@ -10,11 +10,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
 amostragem_router = APIRouter(
     prefix="/api/v1/amostragem",
     tags=["Amostragem & Cotas"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

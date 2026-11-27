@@ -74,39 +74,73 @@ export async function fetchUsersFromApi(): Promise<UserAccountRecord[] | null> {
   }
 }
 
-export async function createUserInApi(data: UserAccountFormData): Promise<UserAccountRecord | null> {
+export function mapRoleToDbCargo(role: UserAccountRecord["role"]): string {
+  switch (role) {
+    case "ADMIN_SISTEMA":
+      return "administrador";
+    case "ESTATISTICO_RESPONSAVEL":
+      return "estatistico";
+    case "AUDITOR_TSE":
+      return "auditor";
+    case "COORDENADOR_CAMPO":
+    case "ANALISTA_TABULACAO":
+    case "PESQUISADOR_CAMPO":
+    case "VISITANTE":
+    default:
+      return "pesquisador";
+  }
+}
+
+export interface CreateUserApiResult {
+  readonly user: UserAccountRecord | null;
+  readonly error?: string;
+}
+
+export async function createUserInApi(data: UserAccountFormData): Promise<CreateUserApiResult> {
   try {
     const parsedNivelId =
       data.idNivelAcesso !== undefined && data.idNivelAcesso !== ""
         ? Number(data.idNivelAcesso)
         : undefined;
+    const dbCargo = mapRoleToDbCargo(data.role);
     const res = await fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/usuarios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nome: data.fullName,
         email: data.email,
-        cargo: data.conreOrCred || data.role,
+        cargo: dbCargo,
         ...(parsedNivelId && Number.isFinite(parsedNivelId)
           ? { id_nivel_acesso: parsedNivelId }
           : {}),
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errBody = (await res.json().catch(() => ({}))) as { detail?: string };
+      return {
+        user: null,
+        error: errBody.detail || `Erro ao cadastrar usuário (HTTP ${res.status}).`,
+      };
+    }
     const created = (await res.json()) as Record<string, unknown>;
     return {
-      id: String(created.id_usuario),
-      email: String(created.email ?? data.email),
-      fullName: String(created.nome ?? data.fullName),
-      role: mapCargoToRole(String(created.cargo ?? "")),
-      conreOrCred: String(created.cargo || data.conreOrCred),
-      isActive: Boolean(created.ativo),
-      boundDeviceId: data.boundDeviceId || null,
-      lastLoginAt: "Nunca",
-      auditChainHash: `db-usr-${created.id_usuario}`,
+      user: {
+        id: String(created.id_usuario),
+        email: String(created.email ?? data.email),
+        fullName: String(created.nome ?? data.fullName),
+        role: mapCargoToRole(String(created.cargo ?? dbCargo)),
+        conreOrCred: String(created.cargo || data.conreOrCred || dbCargo),
+        isActive: Boolean(created.ativo),
+        boundDeviceId: data.boundDeviceId || null,
+        lastLoginAt: "Nunca",
+        auditChainHash: `db-usr-${created.id_usuario}`,
+      },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    return {
+      user: null,
+      error: err instanceof Error ? err.message : "Erro de conexão ao cadastrar usuário.",
+    };
   }
 }
 

@@ -13,12 +13,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 from src.services.gcs import get_gcs_service
 
 usuarios_router = APIRouter(prefix="/pesquisas-tabelas/usuarios", tags=["Usuários do Sistema"])
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
+_AUTH_DEPS = [Depends(get_current_user)]
 
 _ALLOWED_USER_FOTO_TYPES = {"image/png", "image/jpeg", "image/webp"}
 _MAX_USER_FOTO_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -90,10 +95,10 @@ async def _verify_password(session: AsyncSession, plain_password: str, stored_ha
             return bool(res.scalar())
         except Exception:
             return False
-    return hmac.compare_digest(plain_password, stored_hash)
+    return False
 
 
-@usuarios_router.get("", summary="Lista usuários da tabela 'usuarios'")
+@usuarios_router.get("", dependencies=_AUTH_DEPS, summary="Lista usuários da tabela 'usuarios'")
 async def list_usuarios(
     session: DbSessionDep,
     tenant: TenantDep,
@@ -121,7 +126,7 @@ async def list_usuarios(
     return rows
 
 
-@usuarios_router.post("", status_code=status.HTTP_201_CREATED, summary="Cadastra novo usuário")
+@usuarios_router.post("", status_code=status.HTTP_201_CREATED, dependencies=_AUTH_DEPS, summary="Cadastra novo usuário")
 async def create_usuario(
     payload: UsuarioCreateIn,
     session: DbSessionDep,
@@ -184,7 +189,7 @@ class UsuarioUpdateIn(BaseModel):
     cargo: str = Field(..., min_length=2, max_length=100)
 
 
-@usuarios_router.put("/{id_usuario}", summary="Atualiza dados cadastrais do usuário")
+@usuarios_router.put("/{id_usuario}", dependencies=_AUTH_DEPS, summary="Atualiza dados cadastrais do usuário")
 async def update_usuario(
     id_usuario: int,
     payload: UsuarioUpdateIn,
@@ -242,6 +247,7 @@ async def update_usuario(
 @usuarios_router.post(
     "/{id_usuario}/foto",
     status_code=status.HTTP_200_OK,
+    dependencies=_AUTH_DEPS,
     summary="Faz upload da foto do usuário para o GCS (com fallback local)",
 )
 async def upload_usuario_foto(
@@ -348,7 +354,7 @@ async def view_usuario_foto(
     )
 
 
-@usuarios_router.patch("/{id_usuario}/status", summary="Alterna status ativo/inativo do usuário")
+@usuarios_router.patch("/{id_usuario}/status", dependencies=_AUTH_DEPS, summary="Alterna status ativo/inativo do usuário")
 async def toggle_usuario_status(
     id_usuario: int,
     session: DbSessionDep,
@@ -392,7 +398,7 @@ async def toggle_usuario_status(
     return dict(row._mapping) if row else {}
 
 
-@usuarios_router.delete("/{id_usuario}", status_code=status.HTTP_204_NO_CONTENT, summary="Exclui usuário da organização")
+@usuarios_router.delete("/{id_usuario}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_AUTH_DEPS, summary="Exclui usuário da organização")
 async def delete_usuario(
     id_usuario: int,
     session: DbSessionDep,
@@ -428,7 +434,7 @@ async def delete_usuario(
     await session.commit()
 
 
-@usuarios_router.post("/trocar-senha", summary="Permite ao usuário trocar a própria senha")
+@usuarios_router.post("/trocar-senha", dependencies=_AUTH_DEPS, summary="Permite ao usuário trocar a própria senha")
 async def trocar_propria_senha(payload: TrocarSenhaIn, session: DbSessionDep) -> dict:
     res = await session.execute(
         text("SELECT id_usuario, nome, email, senha_hash, ativo FROM sys_usuarios WHERE LOWER(email) = LOWER(:email)"),
@@ -463,7 +469,7 @@ class PapelPermissoesUpdateIn(BaseModel):
     codigos_permissao: list[str] = Field(default_factory=list)
 
 
-@usuarios_router.get("/rbac", summary="Lista papéis, permissões e matriz papel_permissoes")
+@usuarios_router.get("/rbac", dependencies=_AUTH_DEPS, summary="Lista papéis, permissões e matriz papel_permissoes")
 async def get_rbac_matrix(session: DbSessionDep) -> dict:
     papeis_res = await session.execute(
         text("SELECT codigo_papel, nome_exibicao, canal_acesso, nivel_hierarquia, descricao FROM sys_papeis_rbac ORDER BY nivel_hierarquia DESC")
@@ -481,7 +487,7 @@ async def get_rbac_matrix(session: DbSessionDep) -> dict:
     }
 
 
-@usuarios_router.put("/rbac/{codigo_papel}/permissoes", summary="Atualiza permissões de um papel RBAC")
+@usuarios_router.put("/rbac/{codigo_papel}/permissoes", dependencies=_AUTH_DEPS, summary="Atualiza permissões de um papel RBAC")
 async def update_papel_permissoes(
     codigo_papel: str,
     payload: PapelPermissoesUpdateIn,

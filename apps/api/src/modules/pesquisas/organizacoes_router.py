@@ -11,12 +11,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 from src.services.gcs import get_gcs_service
 
 organizacoes_router = APIRouter(prefix="/pesquisas-tabelas/organizacoes", tags=["Organizações SaaS"])
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
+_AUTH_DEPS = [Depends(get_current_user)]
 
 
 def _is_proxy_logo_url(url: str | None) -> bool:
@@ -152,7 +157,7 @@ async def view_organizacao_logomarca(
     )
 
 
-@organizacoes_router.get("", summary="Lista a organização do tenant autenticado")
+@organizacoes_router.get("", dependencies=_AUTH_DEPS, summary="Lista a organização do tenant autenticado")
 async def list_organizacoes(session: DbSessionDep, tenant: TenantDep) -> list[dict]:
     res = await session.execute(
         text("""
@@ -173,7 +178,7 @@ async def list_organizacoes(session: DbSessionDep, tenant: TenantDep) -> list[di
     return rows
 
 
-@organizacoes_router.post("", status_code=status.HTTP_201_CREATED, summary="Cria nova organização")
+@organizacoes_router.post("", status_code=status.HTTP_201_CREATED, dependencies=_AUTH_DEPS, summary="Cria nova organização")
 async def create_organizacao(payload: OrganizacaoPayload, session: DbSessionDep) -> dict:
     res = await session.execute(
         text("""
@@ -207,7 +212,7 @@ async def create_organizacao(payload: OrganizacaoPayload, session: DbSessionDep)
     return dict(row._mapping) if row else {}
 
 
-@organizacoes_router.put("/{id_organizacao}", summary="Atualiza dados da organização do tenant autenticado")
+@organizacoes_router.put("/{id_organizacao}", dependencies=_AUTH_DEPS, summary="Atualiza dados da organização do tenant autenticado")
 async def update_organizacao(
     id_organizacao: int,
     payload: OrganizacaoPayload,
@@ -270,6 +275,7 @@ _MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
 @organizacoes_router.post(
     "/{id_organizacao}/logomarca",
     status_code=status.HTTP_200_OK,
+    dependencies=_AUTH_DEPS,
     summary="Faz upload da logomarca da organização para o GCS (com fallback local)",
 )
 async def upload_organizacao_logomarca(

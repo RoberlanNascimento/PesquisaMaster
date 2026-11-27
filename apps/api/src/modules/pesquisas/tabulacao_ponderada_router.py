@@ -12,11 +12,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
 tabulacao_ponderada_router = APIRouter(
     prefix="/api/v1/tabulacao-ponderada",
     tags=["Ponderação Raking (IPF) & Tabulação Ponderada"],
+    dependencies=[Depends(get_current_user)],
 )
 
 MAPA_DIMENSAO_COLUNA = {

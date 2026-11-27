@@ -3,9 +3,10 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from src.core.config import get_settings
 from src.core.exceptions import DomainError, register_exception_handlers
@@ -19,7 +20,10 @@ from src.modules.pesquisas.estados_router import estados_router
 from src.modules.pesquisas.integracoes_router import integracao_router
 from src.modules.pesquisas.organizacoes_router import organizacoes_router
 from src.modules.pesquisas.profissionais_router import profissionais_router
-from src.modules.pesquisas.questionarios_db_router import questionarios_db_router
+from src.modules.pesquisas.questionarios_db_router import (
+    questionarios_db_router,
+    questionarios_public_router,
+)
 from src.modules.pesquisas.regioes_router import regioes_router
 from src.modules.pesquisas.router import router as pesquisas_db_router
 from src.modules.pesquisas.tables_router import tables_router
@@ -40,6 +44,19 @@ class HealthResponseSchema(BaseModel):
     timestamp: datetime
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adiciona cabeçalhos de segurança HTTP padrão em todas as respostas."""
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
+
+
 def create_app() -> FastAPI:
     """Fábrica de inicialização da aplicação FastAPI."""
     configure_logging()
@@ -54,9 +71,14 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(CorrelationIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -76,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(amostragem_router)
     app.include_router(integracao_router)
     app.include_router(tabulacao_ponderada_router)
+    app.include_router(questionarios_public_router)
     app.include_router(questionarios_db_router)
 
     @app.get(

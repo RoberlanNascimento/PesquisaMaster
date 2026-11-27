@@ -10,11 +10,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
-from src.modules.pesquisas.tenant_context import TenantContext, get_tenant_context
+from src.modules.pesquisas.tenant_context import (
+    TenantContext,
+    get_current_user,
+    get_tenant_context,
+)
 
 campo_operacoes_router = APIRouter(
     prefix="/api/v1/campo-operacoes",
     tags=["Operações de Campo"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
@@ -27,7 +32,21 @@ class AtribuicaoCreateSchema(BaseModel):
     data_inicio: date | None = None
     data_limite: date | None = None
     status_atribuicao: str = "ativa"
-    id_organizacao: int | None = 1
+    id_organizacao: int | None = None
+
+
+class AtribuicaoUpdateSchema(BaseModel):
+    id_profissional: int | None = None
+    id_bairro: int | None = None
+    lote_setor: str | None = None
+    meta_entrevistas: int | None = None
+    data_inicio: date | None = None
+    data_limite: date | None = None
+    status_atribuicao: str | None = None
+
+
+class AuditoriaStatusUpdateSchema(BaseModel):
+    status_auditoria: str
 
 
 class TransferenciaCreateSchema(BaseModel):
@@ -282,14 +301,94 @@ async def create_atribuicao(
     return dict(row) if row else {}
 
 
+@campo_operacoes_router.put("/atribuicoes/{id_atribuicao}")
+async def update_atribuicao(
+    id_atribuicao: int,
+    payload: AtribuicaoUpdateSchema,
+    session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
+) -> dict[str, Any]:
+    existing_res = await session.execute(
+        text(
+            """
+            SELECT * FROM campo_atribuicao_pesquisadores
+            WHERE id_atribuicao = :id_atribuicao AND id_organizacao = :tid
+            """
+        ),
+        {"id_atribuicao": id_atribuicao, "tid": tenant.tenant_id},
+    )
+    existing = existing_res.mappings().first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Atribuição não encontrada.")
+
+    fields_set = payload.model_fields_set
+    params = {
+        "id_atribuicao": id_atribuicao,
+        "tid": tenant.tenant_id,
+        "id_profissional": (
+            payload.id_profissional
+            if "id_profissional" in fields_set and payload.id_profissional is not None
+            else existing["id_profissional"]
+        ),
+        "id_bairro": payload.id_bairro if "id_bairro" in fields_set else existing["id_bairro"],
+        "lote_setor": (
+            payload.lote_setor.strip()
+            if "lote_setor" in fields_set and payload.lote_setor is not None
+            else existing["lote_setor"]
+        ),
+        "meta_entrevistas": (
+            payload.meta_entrevistas
+            if "meta_entrevistas" in fields_set and payload.meta_entrevistas is not None
+            else existing["meta_entrevistas"]
+        ),
+        "data_inicio": (
+            payload.data_inicio
+            if "data_inicio" in fields_set and payload.data_inicio is not None
+            else existing["data_inicio"]
+        ),
+        "data_limite": (
+            payload.data_limite
+            if "data_limite" in fields_set and payload.data_limite is not None
+            else existing["data_limite"]
+        ),
+        "status_atribuicao": (
+            payload.status_atribuicao.strip()
+            if "status_atribuicao" in fields_set and payload.status_atribuicao is not None
+            else existing["status_atribuicao"]
+        ),
+    }
+    result = await session.execute(
+        text(
+            """
+            UPDATE campo_atribuicao_pesquisadores
+            SET id_profissional = :id_profissional,
+                id_bairro = :id_bairro,
+                lote_setor = :lote_setor,
+                meta_entrevistas = :meta_entrevistas,
+                data_inicio = :data_inicio,
+                data_limite = :data_limite,
+                status_atribuicao = :status_atribuicao
+            WHERE id_atribuicao = :id_atribuicao AND id_organizacao = :tid
+            RETURNING id_atribuicao, id_pesquisa, id_profissional, id_bairro,
+                      lote_setor, meta_entrevistas, data_inicio, data_limite, status_atribuicao
+            """
+        ),
+        params,
+    )
+    await session.commit()
+    row = result.mappings().first()
+    return dict(row) if row else {}
+
+
 @campo_operacoes_router.delete("/atribuicoes/{id_atribuicao}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_atribuicao(
     id_atribuicao: int,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> None:
     await session.execute(
-        text("DELETE FROM campo_atribuicao_pesquisadores WHERE id_atribuicao = :id_atribuicao"),
-        {"id_atribuicao": id_atribuicao},
+        text("DELETE FROM campo_atribuicao_pesquisadores WHERE id_atribuicao = :id_atribuicao AND id_organizacao = :tid"),
+        {"id_atribuicao": id_atribuicao, "tid": tenant.tenant_id},
     )
     await session.commit()
 
@@ -297,6 +396,7 @@ async def delete_atribuicao(
 @campo_operacoes_router.get("/transferencias")
 async def list_transferencias(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> list[dict[str, Any]]:
     result = await session.execute(
         text(
@@ -308,10 +408,12 @@ async def list_transferencias(
             FROM campo_transferencias_atribuicao t
             LEFT JOIN campo_profissionais po ON po.id_profissional = t.id_pesquisador_origem
             LEFT JOIN campo_profissionais pd ON pd.id_profissional = t.id_pesquisador_destino
+            WHERE t.id_organizacao = :tid
             ORDER BY t.id_transferencia DESC
             LIMIT 200
             """
-        )
+        ),
+        {"tid": tenant.tenant_id},
     )
     return [dict(r) for r in result.mappings().all()]
 
@@ -320,9 +422,85 @@ async def list_transferencias(
 async def create_transferencia(
     payload: TransferenciaCreateSchema,
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> dict[str, Any]:
     if payload.id_pesquisador_origem == payload.id_pesquisador_destino:
         raise HTTPException(status_code=400, detail="Origem e destino devem ser diferentes.")
+    if payload.quantidade_transferida <= 0:
+        raise HTTPException(status_code=400, detail="A quantidade transferida deve ser maior que zero.")
+
+    tid = tenant.tenant_id
+    id_orig_atrib = payload.id_atribuicao_origem
+    if id_orig_atrib is None:
+        orig_res = await session.execute(
+            text(
+                """
+                SELECT id_atribuicao, meta_entrevistas
+                FROM campo_atribuicao_pesquisadores
+                WHERE id_pesquisa = :id_pesquisa
+                  AND id_profissional = :id_prof
+                  AND id_organizacao = :tid
+                ORDER BY meta_entrevistas DESC, id_atribuicao ASC
+                LIMIT 1
+                """
+            ),
+            {"id_pesquisa": payload.id_pesquisa, "id_prof": payload.id_pesquisador_origem, "tid": tid},
+        )
+        orig_row = orig_res.mappings().first()
+        if orig_row:
+            id_orig_atrib = int(orig_row["id_atribuicao"])
+
+    if id_orig_atrib is not None:
+        await session.execute(
+            text(
+                """
+                UPDATE campo_atribuicao_pesquisadores
+                SET meta_entrevistas = GREATEST(0, COALESCE(meta_entrevistas, 0) - :qtd)
+                WHERE id_atribuicao = :id_atrib AND id_organizacao = :tid
+                """
+            ),
+            {"qtd": payload.quantidade_transferida, "id_atrib": id_orig_atrib, "tid": tid},
+        )
+
+    id_dest_atrib = payload.id_atribuicao_destino
+    if id_dest_atrib is None:
+        dest_res = await session.execute(
+            text(
+                """
+                SELECT id_atribuicao
+                FROM campo_atribuicao_pesquisadores
+                WHERE id_pesquisa = :id_pesquisa
+                  AND id_profissional = :id_prof
+                  AND id_organizacao = :tid
+                ORDER BY id_atribuicao ASC
+                LIMIT 1
+                """
+            ),
+            {"id_pesquisa": payload.id_pesquisa, "id_prof": payload.id_pesquisador_destino, "tid": tid},
+        )
+        dest_row = dest_res.mappings().first()
+        if dest_row:
+            id_dest_atrib = int(dest_row["id_atribuicao"])
+
+    if id_dest_atrib is not None:
+        await session.execute(
+            text(
+                """
+                UPDATE campo_atribuicao_pesquisadores
+                SET meta_entrevistas = COALESCE(meta_entrevistas, 0) + :qtd,
+                    status_atribuicao = 'ativa'
+                WHERE id_atribuicao = :id_atrib AND id_organizacao = :tid
+                """
+            ),
+            {"qtd": payload.quantidade_transferida, "id_atrib": id_dest_atrib, "tid": tid},
+        )
+
+    data = payload.model_dump()
+    data["id_atribuicao_origem"] = id_orig_atrib
+    data["id_atribuicao_destino"] = id_dest_atrib
+    data["id_autorizador"] = payload.id_autorizador or tenant.user_id or 1
+    data["id_organizacao"] = tid
+
     result = await session.execute(
         text(
             """
@@ -338,7 +516,7 @@ async def create_transferencia(
             RETURNING id_transferencia, id_pesquisa, id_pesquisador_origem, id_pesquisador_destino, quantidade_transferida, motivo, data_transferencia
             """
         ),
-        payload.model_dump(),
+        data,
     )
     await session.commit()
     row = result.mappings().first()
@@ -402,21 +580,70 @@ async def create_reatribuicao(
 @campo_operacoes_router.get("/sessoes-profissionais")
 async def list_sessoes_profissionais(
     session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> list[dict[str, Any]]:
     result = await session.execute(
         text(
             """
-            SELECT s.id_sessao::text, s.id_profissional, s.id_usuario,
+            SELECT s.id_sessao::text, s.id_usuario,
                    s.ip_origem, s.user_agent, s.expira_em, s.revogado, s.criado_em,
-                   p.nome AS profissional_nome
+                   u.nome AS usuario_nome, u.nome AS profissional_nome
             FROM sys_sessoes_refresh_tokens s
-            LEFT JOIN campo_profissionais p ON p.id_profissional = s.id_profissional
+            LEFT JOIN sys_usuarios u ON u.id_usuario = s.id_usuario
+            WHERE s.id_organizacao = :tid
             ORDER BY s.criado_em DESC
             LIMIT 200
             """
-        )
+        ),
+        {"tid": tenant.tenant_id},
     )
     return [dict(r) for r in result.mappings().all()]
+
+
+_VALID_AUDITORIA_STATUS = {
+    "aprovada",
+    "reprovada",
+    "pendente",
+    "expurgada",
+    "suspeita",
+    "descartada",
+}
+
+
+@campo_operacoes_router.patch("/sessoes/{id_questionario_pessoa}/auditoria")
+async def update_sessao_auditoria(
+    id_questionario_pessoa: int,
+    payload: AuditoriaStatusUpdateSchema,
+    session: AsyncSession = Depends(get_db_session),
+    tenant: TenantContext = Depends(get_tenant_context),
+) -> dict[str, Any]:
+    novo_status = (payload.status_auditoria or "").strip().lower()
+    if novo_status not in _VALID_AUDITORIA_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="status_auditoria inválido. Use aprovada, reprovada, pendente ou expurgada.",
+        )
+    result = await session.execute(
+        text(
+            """
+            UPDATE campo_questionarios_pessoas
+            SET status_auditoria = :status_auditoria
+            WHERE id_questionario_pessoa = :id_qp
+              AND id_organizacao = :tid
+            RETURNING id_questionario_pessoa, id_pesquisa, status_auditoria
+            """
+        ),
+        {
+            "status_auditoria": novo_status,
+            "id_qp": id_questionario_pessoa,
+            "tid": tenant.tenant_id,
+        },
+    )
+    await session.commit()
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sessão de entrevista não encontrada.")
+    return dict(row)
 
 
 @campo_operacoes_router.get("/logs-autenticacao")

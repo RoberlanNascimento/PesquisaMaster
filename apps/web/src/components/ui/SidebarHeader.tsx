@@ -57,11 +57,16 @@ export function SidebarHeader({
       .then((r) => (r.ok ? r.json() : []))
       .then((items: any[]) => {
         if (cancelled || !Array.isArray(items) || items.length === 0) return;
-        const first = items[0];
-        setOrgName(first.nome_fantasia || first.razao_social || "");
-        setOrgCnpj(first.cnpj || "");
-        if (first.logomarca !== undefined) {
-          setLogoUrl(first.logomarca ?? null);
+        const targetTenantId = currentUser?.tenantId ?? activeTenantId;
+        const matched =
+          (targetTenantId
+            ? items.find((org) => String(org?.id_organizacao) === String(targetTenantId))
+            : undefined) ?? items[0];
+        if (!matched) return;
+        setOrgName(matched.nome_fantasia || matched.razao_social || "");
+        setOrgCnpj(matched.cnpj || "");
+        if (matched.logomarca !== undefined) {
+          setLogoUrl(matched.logomarca ?? null);
         }
       })
       .catch(() => {});

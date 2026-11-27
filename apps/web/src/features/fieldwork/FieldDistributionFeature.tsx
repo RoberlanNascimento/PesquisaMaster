@@ -12,38 +12,81 @@ export interface FieldAssignmentRecord {
   readonly status: string;
 }
 
-const INITIAL_ASSIGNMENTS: readonly FieldAssignmentRecord[] = [
-  { id: 1, surveyName: "Pesquisa Eleitoral Belém 2026", researcherName: "Ana Paula de Souza", neighborhoodName: "Marco", target: 50, completed: 42, date: "10/11/2026", status: "Em Andamento" },
-  { id: 2, surveyName: "Pesquisa Eleitoral Belém 2026", researcherName: "Carlos Eduardo Silva", neighborhoodName: "Umarizal", target: 40, completed: 40, date: "10/11/2026", status: "Concluído" },
-  { id: 3, surveyName: "Pesquisa Eleitoral Belém 2026", researcherName: "Marcos Vinicius Lima", neighborhoodName: "Guamá", target: 60, completed: 25, date: "11/11/2026", status: "Em Andamento" },
-  { id: 4, surveyName: "Pesquisa Eleitoral Belém 2026", researcherName: "Juliana Mendes", neighborhoodName: "Pedreira", target: 45, completed: 10, date: "12/11/2026", status: "Em Andamento" },
-];
+interface BackendAtribuicaoRow {
+  readonly id_atribuicao: number;
+  readonly id_pesquisa?: number | null;
+  readonly id_profissional?: number | null;
+  readonly id_bairro?: number | null;
+  readonly pesquisa_nome?: string | null;
+  readonly pesquisador_nome?: string | null;
+  readonly nome_bairro?: string | null;
+  readonly lote_setor?: string | null;
+  readonly meta_entrevistas?: number | null;
+  readonly quantidade_meta?: number | null;
+  readonly quantidade_realizada?: number | null;
+  readonly entrevistas_realizadas?: number | null;
+  readonly data_inicio?: string | null;
+  readonly data_limite?: string | null;
+  readonly data_atribuicao?: string | null;
+  readonly status_atribuicao?: string | null;
+}
+
+function formatDateBr(raw?: string | null): string | null {
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString("pt-BR");
+}
+
+function formatPeriodLabel(row: BackendAtribuicaoRow): string {
+  const start = formatDateBr(row.data_inicio ?? row.data_atribuicao);
+  const end = formatDateBr(row.data_limite);
+  if (start && end) return `${start} — ${end}`;
+  return start ?? end ?? "—";
+}
 
 export function FieldDistributionFeature(): React.JSX.Element {
-  const [assignments, setAssignments] = useState<readonly FieldAssignmentRecord[]>(INITIAL_ASSIGNMENTS);
+  const [assignments, setAssignments] = useState<readonly FieldAssignmentRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("TODOS");
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/atribuicoes")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((items: any[]) => {
-        if (items && items.length > 0) {
-          setAssignments(
-            items.map((a) => ({
+    fetch("http://127.0.0.1:8000/api/v1/pesquisas-tabelas/atribuicoes", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((items: unknown) => {
+        if (!Array.isArray(items)) return;
+        setAssignments(
+          (items as BackendAtribuicaoRow[]).map((a) => {
+            const target = Number(a.meta_entrevistas ?? a.quantidade_meta ?? 0);
+            const completed = Number(a.quantidade_realizada ?? a.entrevistas_realizadas ?? 0);
+            const rawStatus = (a.status_atribuicao ?? "").toLowerCase();
+            const isConcluded =
+              rawStatus === "concluida" ||
+              rawStatus === "concluído" ||
+              (target > 0 && completed >= target);
+
+            return {
               id: a.id_atribuicao,
-              surveyName: a.pesquisa_nome || `Pesquisa #${a.id_pesquisa}`,
-              researcherName: a.pesquisador_nome || `Pesquisador #${a.id_profissional}`,
-              neighborhoodName: a.nome_bairro || `Bairro #${a.id_bairro}`,
-              target: a.quantidade_meta ?? 0,
-              completed: a.quantidade_realizada ?? 0,
-              date: a.data_atribuicao ? new Date(a.data_atribuicao).toLocaleDateString("pt-BR") : "Recentemente",
-              status: (a.quantidade_realizada ?? 0) >= (a.quantidade_meta ?? 1) ? "Concluído" : "Em Andamento",
-            }))
-          );
-        }
+              surveyName: a.pesquisa_nome || `Pesquisa #${a.id_pesquisa ?? "?"}`,
+              researcherName: a.pesquisador_nome || `Pesquisador #${a.id_profissional ?? "?"}`,
+              neighborhoodName:
+                a.nome_bairro ||
+                a.lote_setor ||
+                (a.id_bairro ? `Bairro #${a.id_bairro}` : "Setor Geral"),
+              target,
+              completed,
+              date: formatPeriodLabel(a),
+              status: isConcluded ? "Concluído" : "Em Andamento",
+            };
+          }),
+        );
       })
-      .catch(() => {});
+      .catch(() => {
+        setAssignments([]);
+      });
   }, []);
 
   const filtered = useMemo(() => {
@@ -105,7 +148,7 @@ export function FieldDistributionFeature(): React.JSX.Element {
             );
           },
         },
-        { header: "Data Atribuição", key: "date", render: (a) => <span style={{ fontSize: "12px", color: "#94a3b8" }}>{a.date}</span> },
+        { header: "Período (Início — Limite)", key: "date", render: (a) => <span style={{ fontSize: "12px", color: "#94a3b8" }}>{a.date}</span> },
       ]}
       data={filtered}
       keyExtractor={(a) => String(a.id)}
